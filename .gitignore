@@ -15,4 +15,6 @@
 # vendor/
 .idea/
 src/
+pkg/
 bin/
+gfwlist.txt

@@ -151,6 +151,20 @@ func initConfig() {
 	if val := mainSec.Key("listen").String(); val != "" {
 		listen = val // set global variable
 	}
+	// gfwlist
+	//if filename := mainSec.Key("gfwlist").String(); filename != "" {
+	//	var raw, content []byte
+	//	if raw, err = ioutil.ReadFile(filename); err != nil {
+	//		log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
+	//	}
+	//	if content, err = base64.StdEncoding.DecodeString(string(raw)); err != nil {
+	//		log.Fatalf("[CRITICAL] gfwlist decode error: %v\n", err)
+	//	}
+	//	lines := strings.Split(string(content), "\n")
+	//	if gfwList, err = adblock.NewRules(lines, nil); err != nil {
+	//		log.Fatalf("[CRITICAL] gfwlist parse error: %v\n", err)
+	//	}
+	//}
 	// 服务器和规则列表
 	svrSec := config.Section("servers")
 	for svrName, svrStr := range svrSec.KeysHash() {
