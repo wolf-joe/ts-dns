@@ -180,7 +180,7 @@ func main() {
 func initConfig() {
 	// 读取配置文件
 	var cfgPath string
-	flag.StringVar(&cfgPath, "config", "dns-splitter.ini", "Config File Path")
+	flag.StringVar(&cfgPath, "config", "ts-dns.ini", "Config File Path")
 	flag.Parse()
 	config, err := ini.Load(cfgPath)
 	if err != nil {

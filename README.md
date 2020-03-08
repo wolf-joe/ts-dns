@@ -1,13 +1,13 @@
-# dns-splitter
+# Telescope DNS
 带GFWList&反污染功能的DNS分流器
 ![](arch.png)
 
 ## 编译&使用
 
 ```shell
-go build -o dns-splitter *.go
-# ./dns-splitter -config dns-splitter.ini
-./dns-splitter
+go build -o ts-dns *.go
+# ./ts-dns -config ts-dns.ini
+./ts-dns
 ```
 
 ## 配置说明
@@ -33,7 +33,7 @@ socks5 = 127.0.0.1:1080
 suffix = company.com
 ```
 
-* 配置文件默认为`dns-splitter.ini`。
+* 配置文件默认为`ts-dns`。
 * `gfwlist.txt`参考`https://github.com/gfwlist/gfwlist/raw/master/gfwlist.txt`。
 * 反污染功能无法关闭。如不想使用该功能可将`servers`中的`clean`字段和`dirty`字段设为相同值。
 * 当配置了`redis`Section里配置了`host`时，本程序将使用`Redis`作为分组判定结果缓存，反之则使用内置的`TTLMap`作为缓存。
