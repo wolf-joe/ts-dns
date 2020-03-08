@@ -4,40 +4,53 @@ import (
 	"flag"
 	"github.com/go-redis/redis"
 	"github.com/miekg/dns"
+	"golang.org/x/net/proxy"
 	"gopkg.in/ini.v1"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"time"
 )
 
-var listen, net = ":53", "udp"
 var serversMap = map[string][]string{
 	"dirty": {},
 	"clean": {},
 }
 var ruleMap = map[string]string{}
+var s5Map = map[string]proxy.Dialer{}
 var gfwList *GFWList
 
+var listen = ":53"
 var dnsClient = new(dns.Client)
 var groupCache interface{}
 
-func queryDns(question dns.Question, servers []string) (*dns.Msg, error) {
+func queryDns(question dns.Question, server string, s5dialer proxy.Dialer) (r *dns.Msg, err error) {
 	msg := dns.Msg{}
 	msg.SetQuestion(question.Name, question.Qtype)
-	var err error
-	for _, server := range servers {
-		if server == "" {
-			continue
+
+	var s5co net.Conn
+	defer func() {
+		if s5co != nil {
+			_ = s5co.Close()
 		}
-		if r, _, _err := dnsClient.Exchange(&msg, server); r != nil {
-			return r, nil
-		} else if _err != nil {
-			log.Printf("[ERROR] exchange error: %v\n", _err)
-			err = _err
+	}()
+	if s5dialer != nil {
+		// 使用socks5代理连接DNS服务器
+		if s5co, err = s5dialer.Dial("tcp", server); err != nil {
+			return nil, err
+		} else {
+			co := &dns.Conn{Conn: s5co}
+			if err = co.WriteMsg(&msg); err != nil {
+				return nil, err
+			}
+			return co.ReadMsg()
 		}
+	} else {
+		// 不使用socks5代理
+		r, _, err = dnsClient.Exchange(&msg, server)
+		return r, err
 	}
-	return nil, err
 }
 
 func setGroupCache(domain string, group string) error {
@@ -51,22 +64,28 @@ func setGroupCache(domain string, group string) error {
 	}
 }
 
-func isPolluted(domain string) (bool, error) {
+func isPolluted(domain string) (polluted bool, err error) {
 	// 向clean组dns服务器（推荐设置为公共DNS）发送请求来判定域名是否被污染
 	domain = "ne-" + strconv.FormatInt(time.Now().UnixNano(), 16) + "." + domain
 	log.Println("[DEBUG] check pollute: " + domain)
-	r, err := queryDns(dns.Question{Name: domain, Qtype: dns.TypeA}, serversMap["clean"])
-	if err != nil {
-		return false, err
+	var r *dns.Msg
+	for _, server := range serversMap["clean"] {
+		r, err = queryDns(dns.Question{Name: domain, Qtype: dns.TypeA}, server, s5Map["clean"])
+		if err != nil {
+			log.Printf("[ERROR] query dns error: %v\n", err)
+		}
+		if r != nil {
+			break
+		}
 	}
 	// 对于很可能不存在的域名，如果直接返回一条A记录则判定为域名已被污染
-	if len(r.Answer) == 1 {
+	if r != nil && len(r.Answer) == 1 {
 		switch r.Answer[0].(type) {
 		case *dns.A:
 			return true, nil
 		}
 	}
-	return false, nil
+	return false, err
 }
 
 func getGroupName(domain string) string {
@@ -78,11 +97,13 @@ func getGroupName(domain string) string {
 			return groupName
 		}
 	}
+
 	// 判断gfwlist
 	if groupName := gfwList.getGroupName(domain); groupName != "" {
 		log.Printf("[INFO] %s match gfwlist\n", domain)
 		return groupName
 	}
+
 	// 从缓存中读取前次判断结果
 	var cacheHit interface{}
 	switch groupCache.(type) {
@@ -95,43 +116,62 @@ func getGroupName(domain string) string {
 	if _, ok := serversMap[cacheHit.(string)]; ok {
 		return cacheHit.(string) // 如果缓存内的groupName有效则直接返回
 	}
+
 	// 判断域名是否受到污染，并按污染结果将域名分组
-	if polluted, err := isPolluted(domain); polluted {
+	var setErr error
+	defer func() {
+		if setErr != nil {
+			log.Printf("[ERROR] set group cache error: %s\n", setErr)
+		}
+	}()
+	if polluted, err := isPolluted(domain); err != nil {
+		log.Printf("[ERROR] check polluted error: %v\n", err)
+		return "clean"
+	} else if polluted {
 		log.Printf("[WARNING] %s polluted\n", domain)
-		if setErr := setGroupCache(domain, "dirty"); setErr != nil {
-			log.Printf("[ERROR] set group cache error: %s\n", setErr)
-		}
+		setErr = setGroupCache(domain, "dirty")
 		return "dirty"
-	} else if err == nil {
-		if setErr := setGroupCache(domain, "clean"); setErr != nil {
-			log.Printf("[ERROR] set group cache error: %s\n", setErr)
-		}
+	} else {
+		setErr = setGroupCache(domain, "clean")
+		return "clean"
 	}
-	return "clean"
 }
 
 type handler struct{}
 
 func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
+	var r *dns.Msg
+	defer func() {
+		if r != nil {
+			r.SetReply(request)
+			_ = resp.WriteMsg(r)
+		}
+		_ = resp.Close()
+	}()
+
 	question := request.Question[0]
 	if strings.Count(question.Name, ".ne-") > 1 {
-		log.Fatalln("[CRITICAL] recursive queryDns") // 防止递归
+		log.Fatalln("[CRITICAL] recursive query") // 防止递归
 	}
 	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
-
+	var err error
 	group := getGroupName(question.Name)
-	if r, _ := queryDns(question, serversMap[group]); r != nil {
-		r.SetReply(request)
-		_ = resp.WriteMsg(r)
+	for _, server := range serversMap[group] { // 遍历DNS服务器
+		r, err = queryDns(question, server, s5Map[group]) // 发送查询请求
+		if err != nil {
+			log.Printf("[ERROR] query dns error: %v\n", err)
+		}
+		if r != nil {
+			return
+		}
 	}
-	_ = resp.Close()
 }
 
 func main() {
 	initConfig()
-	srv := &dns.Server{Addr: listen, Net: net}
+	srv := &dns.Server{Addr: listen, Net: "udp"}
 	srv.Handler = &handler{}
-	log.Printf("[WARNING] listen on %s/%s\n", listen, net)
+	log.Printf("[WARNING] listen on %s/udp\n", listen)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("[CITICAL] Failed to set udp listener %s\n", err.Error())
 	}
@@ -179,6 +219,12 @@ func initConfig() {
 				}
 				ruleMap[suffix] = groupName
 			}
+		}
+		// 读取socks5代理地址
+		s5addr := ruleSec.Key("socks5").String()
+		if s5addr != "" {
+			s5dialer, _ := proxy.SOCKS5("tcp", s5addr, nil, proxy.Direct)
+			s5Map[groupName] = s5dialer
 		}
 	}
 	// redis
