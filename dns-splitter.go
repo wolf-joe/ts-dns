@@ -17,6 +17,7 @@ var serversMap = map[string][]string{
 	"clean": {},
 }
 var ruleMap = map[string]string{}
+var gfwList *GFWList
 
 var dnsClient = new(dns.Client)
 var groupCache interface{}
@@ -73,9 +74,14 @@ func getGroupName(domain string) string {
 	// 优先检测预设规则
 	for suffix, groupName := range ruleMap {
 		if strings.HasSuffix(domain, suffix) {
-			log.Printf("[INFO] match suffix %s\n", suffix)
+			log.Printf("[INFO] %s match suffix %s\n", domain, suffix)
 			return groupName
 		}
+	}
+	// 判断gfwlist
+	if groupName := gfwList.getGroupName(domain); groupName != "" {
+		log.Printf("[INFO] %s match gfwlist\n", domain)
+		return groupName
 	}
 	// 从缓存中读取前次判断结果
 	var cacheHit interface{}
@@ -91,7 +97,7 @@ func getGroupName(domain string) string {
 	}
 	// 判断域名是否受到污染，并按污染结果将域名分组
 	if polluted, err := isPolluted(domain); polluted {
-		log.Printf("[WARNING] polluted: %s\n", domain)
+		log.Printf("[WARNING] %s polluted\n", domain)
 		if setErr := setGroupCache(domain, "dirty"); setErr != nil {
 			log.Printf("[ERROR] set group cache error: %s\n", setErr)
 		}
@@ -146,19 +152,11 @@ func initConfig() {
 		listen = val // set global variable
 	}
 	// gfwlist
-	//if filename := mainSec.Key("gfwlist").String(); filename != "" {
-	//	var raw, content []byte
-	//	if raw, err = ioutil.ReadFile(filename); err != nil {
-	//		log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
-	//	}
-	//	if content, err = base64.StdEncoding.DecodeString(string(raw)); err != nil {
-	//		log.Fatalf("[CRITICAL] gfwlist decode error: %v\n", err)
-	//	}
-	//	lines := strings.Split(string(content), "\n")
-	//	if gfwList, err = adblock.NewRules(lines, nil); err != nil {
-	//		log.Fatalf("[CRITICAL] gfwlist parse error: %v\n", err)
-	//	}
-	//}
+	if filename := mainSec.Key("gfwlist").String(); filename != "" {
+		if gfwList, err = new(GFWList).Init(filename); err != nil {
+			log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
+		}
+	}
 	// 服务器和规则列表
 	svrSec := config.Section("servers")
 	for groupName, svrStr := range svrSec.KeysHash() {
