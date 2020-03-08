@@ -17,6 +17,7 @@ go build -o ts-dns *.go
 [main]
 listen = :53
 gfwlist = gfwlist.txt
+hosts = /etc/hosts
 
 [redis]
 
@@ -42,5 +43,4 @@ suffix = company.com
 
 ## TODO
 
-* HOSTS
 * 自动添加IPSET

@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/go-redis/redis"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 	"gopkg.in/ini.v1"
+	"io/ioutil"
 	"log"
 	"net"
 	"strconv"
@@ -19,6 +21,7 @@ var serversMap = map[string][]string{
 }
 var ruleMap = map[string]string{}
 var s5Map = map[string]proxy.Dialer{}
+var hostsMap = map[string]string{}
 var gfwList *GFWList
 
 var listen = ":53"
@@ -163,6 +166,17 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		log.Fatalln("[CRITICAL] recursive query") // 防止递归
 	}
 	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
+	if val, ok := hostsMap[question.Name]; ok {
+		record := fmt.Sprintf("%s 3600 IN A %s", question.Name, val)
+		if ret, err := dns.NewRR(record); err != nil {
+			log.Printf("[ERROR] make dns.RR error: %v\n", err)
+		} else {
+			r = new(dns.Msg)
+			r.Answer = append(r.Answer, ret)
+		}
+		return
+	}
+
 	var err error
 	group := getGroupName(question.Name)
 	for _, server := range serversMap[group] { // 遍历DNS服务器
@@ -204,6 +218,23 @@ func initConfig() {
 	if filename := mainSec.Key("gfwlist").String(); filename != "" {
 		if gfwList, err = new(GFWList).Init(filename); err != nil {
 			log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
+		}
+	}
+	// hosts file
+	if filename := mainSec.Key("hosts").String(); filename != "" {
+		if raw, err := ioutil.ReadFile(filename); err != nil {
+			log.Fatalf("[CRITICAL] hosts file read error: %v\n", err)
+		} else {
+			for _, line := range strings.Split(string(raw), "\n") {
+				line = strings.Trim(line, " \r")
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				split := func(r rune) bool { return r == ' ' || r == '\t' }
+				if arr := strings.FieldsFunc(line, split); len(arr) >= 2 {
+					hostsMap[arr[1]+"."] = arr[0]
+				}
+			}
 		}
 	}
 	// 服务器和规则列表
