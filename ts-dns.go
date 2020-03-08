@@ -24,13 +24,22 @@ var gfwList *GFWList
 var listen = ":53"
 var dnsClient = new(dns.Client)
 var groupCache interface{}
+var queryCache = new(TTLMap).Init(60)
 
 func queryDns(question dns.Question, server string, s5dialer proxy.Dialer) (r *dns.Msg, err error) {
+	// 查询缓存
+	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
+	if cacheHit, ok := queryCache.Get(cacheKey); ok {
+		log.Printf("[INFO] query cache hit\n")
+		return cacheHit.(*dns.Msg), nil
+	}
 	msg := dns.Msg{}
 	msg.SetQuestion(question.Name, question.Qtype)
 
 	var s5co net.Conn
+	// 返回前缓存查询结果并关闭socks5连接
 	defer func() {
+		queryCache.Set(cacheKey, r, time.Minute)
 		if s5co != nil {
 			_ = s5co.Close()
 		}

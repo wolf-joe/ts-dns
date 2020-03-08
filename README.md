@@ -39,10 +39,8 @@ suffix = company.com
 * 当配置了`redis`Section里配置了`host`时，本程序将使用`Redis`作为分组判定结果缓存，反之则使用内置的`TTLMap`作为缓存。
 * 污染判定机制尚不完善，目前已知无法正确判定是否被污染的域名如`rule:dirty`所示。推荐使用`GFWList`实现更好的准确度。
 * `dirty`组DNS里的地址推荐设置为自建的`dnscrypt-proxy`，即搭配DOH/DOT使用。
-* 目前尚未实现DNS缓存，直接用socks5代理查询DNS延迟较大，请谨慎使用。
 
 ## TODO
 
-* DNS查询缓存
 * HOSTS
 * 自动添加IPSET
