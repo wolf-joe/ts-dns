@@ -13,13 +13,13 @@ import (
 
 var listen, net = ":53", "udp"
 var serversMap = map[string][]string{
-	"risk": {},
-	"safe": {},
+	"dirty": {},
+	"clean": {},
 }
 var ruleMap = map[string]string{}
 
 var dnsClient = new(dns.Client)
-var pollutedCache interface{}
+var groupCache interface{}
 
 func query(question dns.Question, servers []string) (*dns.Msg, error) {
 	msg := dns.Msg{}
@@ -39,16 +39,13 @@ func query(question dns.Question, servers []string) (*dns.Msg, error) {
 	return nil, err
 }
 
-func setPollutedFlag(name string, polluted bool) error {
-	pollutedFlag, ex := "0", time.Hour*24
-	if polluted {
-		pollutedFlag = "1"
-	}
-	switch pollutedCache.(type) {
+func setGroup(name string, group string) error {
+	ex := time.Hour * 24
+	switch groupCache.(type) {
 	case *redis.Client:
-		return pollutedCache.(*redis.Client).Set(name, pollutedFlag, ex).Err()
+		return groupCache.(*redis.Client).Set(name, group, ex).Err()
 	default:
-		pollutedCache.(*TTLMap).Set(name, pollutedFlag, ex)
+		groupCache.(*TTLMap).Set(name, group, ex)
 		return nil
 	}
 }
@@ -57,15 +54,15 @@ func isPolluted(name string) (bool, error) {
 	// 判断域名是否被污染
 	// 检测缓存是否命中
 	var cacheHit interface{}
-	switch pollutedCache.(type) {
+	switch groupCache.(type) {
 	case *redis.Client:
-		cacheHit, _ = pollutedCache.(*redis.Client).Get(name).Result()
+		cacheHit, _ = groupCache.(*redis.Client).Get(name).Result()
 	default:
-		cacheHit, _ = pollutedCache.(*TTLMap).Get(name)
+		cacheHit, _ = groupCache.(*TTLMap).Get(name)
 	}
-	if cacheHit == "1" {
+	if cacheHit == "dirty" {
 		return true, nil
-	} else if cacheHit == "0" {
+	} else if cacheHit == "clean" {
 		return false, nil
 	}
 	// 缓存未命中
@@ -100,13 +97,13 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	if strings.Count(question.Name, "ne-") > 1 {
 		log.Fatalln("[CRITICAL] recursive query") // 防止递归
 	}
-	log.Printf("[INFO] query %s\n", question.Name)
+	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
 
 	// 优先检测预设规则
-	for suffix, svrName := range ruleMap {
+	for suffix, groupName := range ruleMap {
 		if strings.HasSuffix(question.Name, suffix) {
 			log.Printf("[INFO] match suffix %s\n", suffix)
-			r, _ = query(question, serversMap[svrName])
+			r, _ = query(question, serversMap[groupName])
 			return
 		}
 	}
@@ -114,16 +111,16 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var setErr error
 	if polluted, err := isPolluted(question.Name); polluted {
 		log.Printf("[WARNING] polluted: %s\n", question.Name)
-		setErr = setPollutedFlag(question.Name, true)
+		setErr = setGroup(question.Name, "dirty")
 		r, _ = query(question, serversMap["safe"])
 		return
 	} else if err == nil {
-		setErr = setPollutedFlag(question.Name, false)
+		setErr = setGroup(question.Name, "clean")
 	}
 	if setErr != nil {
-		log.Printf("[ERROR] flag set error: %s\n", setErr)
+		log.Printf("[ERROR] group set error: %s\n", setErr)
 	}
-	r, _ = query(question, serversMap["risk"])
+	r, _ = query(question, serversMap["clean"])
 	return
 }
 
@@ -167,17 +164,17 @@ func initConfig() {
 	//}
 	// 服务器和规则列表
 	svrSec := config.Section("servers")
-	for svrName, svrStr := range svrSec.KeysHash() {
-		serversMap[svrName] = strings.Split(svrStr, ",")
-		for i, server := range serversMap[svrName] {
+	for groupName, svrStr := range svrSec.KeysHash() {
+		serversMap[groupName] = strings.Split(svrStr, ",")
+		for i, server := range serversMap[groupName] {
 			server = strings.Trim(server, " ")
 			if server != "" && !strings.ContainsAny(server, ":") {
 				server += ":53"
 			}
-			serversMap[svrName][i] = server
+			serversMap[groupName][i] = server
 		}
 		// 读取rule:xxx下suffix对应的所有域名后缀
-		ruleSec := config.Section("rule:" + svrName)
+		ruleSec := config.Section("rule:" + groupName)
 		suffixStr := ruleSec.Key("suffix").String()
 		for _, suffix := range strings.Split(suffixStr, ",") {
 			suffix = strings.Trim(suffix, " ")
@@ -185,7 +182,7 @@ func initConfig() {
 				if suffix[len(suffix)-1] != '.' {
 					suffix += "."
 				}
-				ruleMap[suffix] = svrName
+				ruleMap[suffix] = groupName
 			}
 		}
 	}
@@ -194,17 +191,17 @@ func initConfig() {
 	if rdsHost := rdsSec.Key("host").String(); rdsHost != "" {
 		rdsPwd := rdsSec.Key("password").String()
 		rdsDB, _ := strconv.Atoi(rdsSec.Key("db").String())
-		pollutedCache = redis.NewClient(&redis.Options{Addr: rdsHost, Password: rdsPwd, DB: rdsDB})
-		if _, err := pollutedCache.(*redis.Client).Ping().Result(); err != nil {
+		groupCache = redis.NewClient(&redis.Options{Addr: rdsHost, Password: rdsPwd, DB: rdsDB})
+		if _, err := groupCache.(*redis.Client).Ping().Result(); err != nil {
 			log.Fatalf("[CRITICAL] redis connect error: %v\n", err)
 		} else {
 			log.Printf("[WARNING] connect redis://%s/%d success\n", rdsHost, rdsDB)
 		}
 	} else {
-		pollutedCache = new(TTLMap).Init(60)
+		groupCache = new(TTLMap).Init(60)
 	}
 	// 判断配置是否完整
-	if len(serversMap["risk"]) <= 0 || len(serversMap["safe"]) <= 0 {
-		log.Fatalln("[CRITICAL] risk or safe servers cannot be empty")
+	if len(serversMap["dirty"]) <= 0 || len(serversMap["clean"]) <= 0 {
+		log.Fatalln("[CRITICAL] server of group dirty/clean cannot be empty")
 	}
 }
