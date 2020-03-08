@@ -21,7 +21,7 @@ var ruleMap = map[string]string{}
 var dnsClient = new(dns.Client)
 var groupCache interface{}
 
-func query(question dns.Question, servers []string) (*dns.Msg, error) {
+func queryDns(question dns.Question, servers []string) (*dns.Msg, error) {
 	msg := dns.Msg{}
 	msg.SetQuestion(question.Name, question.Qtype)
 	var err error
@@ -39,36 +39,22 @@ func query(question dns.Question, servers []string) (*dns.Msg, error) {
 	return nil, err
 }
 
-func setGroup(name string, group string) error {
+func setGroupCache(domain string, group string) error {
 	ex := time.Hour * 24
 	switch groupCache.(type) {
 	case *redis.Client:
-		return groupCache.(*redis.Client).Set(name, group, ex).Err()
+		return groupCache.(*redis.Client).Set(domain, group, ex).Err()
 	default:
-		groupCache.(*TTLMap).Set(name, group, ex)
+		groupCache.(*TTLMap).Set(domain, group, ex)
 		return nil
 	}
 }
 
-func isPolluted(name string) (bool, error) {
-	// 判断域名是否被污染
-	// 检测缓存是否命中
-	var cacheHit interface{}
-	switch groupCache.(type) {
-	case *redis.Client:
-		cacheHit, _ = groupCache.(*redis.Client).Get(name).Result()
-	default:
-		cacheHit, _ = groupCache.(*TTLMap).Get(name)
-	}
-	if cacheHit == "dirty" {
-		return true, nil
-	} else if cacheHit == "clean" {
-		return false, nil
-	}
-	// 缓存未命中
-	name = "ne-" + strconv.FormatInt(time.Now().UnixNano(), 16) + "." + name
-	log.Println("[DEBUG] check pollute: " + name)
-	r, err := query(dns.Question{Name: name, Qtype: dns.TypeA}, serversMap["risk"])
+func isPolluted(domain string) (bool, error) {
+	// 向clean组dns服务器（推荐设置为公共DNS）发送请求来判定域名是否被污染
+	domain = "ne-" + strconv.FormatInt(time.Now().UnixNano(), 16) + "." + domain
+	log.Println("[DEBUG] check pollute: " + domain)
+	r, err := queryDns(dns.Question{Name: domain, Qtype: dns.TypeA}, serversMap["clean"])
 	if err != nil {
 		return false, err
 	}
@@ -82,46 +68,57 @@ func isPolluted(name string) (bool, error) {
 	return false, nil
 }
 
+func getGroupName(domain string) string {
+	// 判断目标域名所在的分组
+	// 优先检测预设规则
+	for suffix, groupName := range ruleMap {
+		if strings.HasSuffix(domain, suffix) {
+			log.Printf("[INFO] match suffix %s\n", suffix)
+			return groupName
+		}
+	}
+	// 从缓存中读取前次判断结果
+	var cacheHit interface{}
+	switch groupCache.(type) {
+	case *redis.Client:
+		// get redis key时忽略错误，因为作者无法区分"key不存在"和其它错误
+		cacheHit, _ = groupCache.(*redis.Client).Get(domain).Result()
+	default:
+		cacheHit, _ = groupCache.(*TTLMap).Get(domain)
+	}
+	if _, ok := serversMap[cacheHit.(string)]; ok {
+		return cacheHit.(string) // 如果缓存内的groupName有效则直接返回
+	}
+	// 判断域名是否受到污染，并按污染结果将域名分组
+	if polluted, err := isPolluted(domain); polluted {
+		log.Printf("[WARNING] polluted: %s\n", domain)
+		if setErr := setGroupCache(domain, "dirty"); setErr != nil {
+			log.Printf("[ERROR] set group cache error: %s\n", setErr)
+		}
+		return "dirty"
+	} else if err == nil {
+		if setErr := setGroupCache(domain, "clean"); setErr != nil {
+			log.Printf("[ERROR] set group cache error: %s\n", setErr)
+		}
+	}
+	return "clean"
+}
+
 type handler struct{}
 
 func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
-	var r *dns.Msg
-	defer func() {
-		if r != nil {
-			r.SetReply(request)
-			_ = resp.WriteMsg(r)
-		}
-		_ = resp.Close()
-	}()
 	question := request.Question[0]
-	if strings.Count(question.Name, "ne-") > 1 {
-		log.Fatalln("[CRITICAL] recursive query") // 防止递归
+	if strings.Count(question.Name, ".ne-") > 1 {
+		log.Fatalln("[CRITICAL] recursive queryDns") // 防止递归
 	}
 	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
 
-	// 优先检测预设规则
-	for suffix, groupName := range ruleMap {
-		if strings.HasSuffix(question.Name, suffix) {
-			log.Printf("[INFO] match suffix %s\n", suffix)
-			r, _ = query(question, serversMap[groupName])
-			return
-		}
+	group := getGroupName(question.Name)
+	if r, _ := queryDns(question, serversMap[group]); r != nil {
+		r.SetReply(request)
+		_ = resp.WriteMsg(r)
 	}
-	// 判断域名是否被污染
-	var setErr error
-	if polluted, err := isPolluted(question.Name); polluted {
-		log.Printf("[WARNING] polluted: %s\n", question.Name)
-		setErr = setGroup(question.Name, "dirty")
-		r, _ = query(question, serversMap["safe"])
-		return
-	} else if err == nil {
-		setErr = setGroup(question.Name, "clean")
-	}
-	if setErr != nil {
-		log.Printf("[ERROR] group set error: %s\n", setErr)
-	}
-	r, _ = query(question, serversMap["clean"])
-	return
+	_ = resp.Close()
 }
 
 func main() {
