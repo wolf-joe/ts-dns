@@ -41,5 +41,6 @@ suffix = company.com
 
 ## TODO
 
+* socks5代理查询DNS
 * 支持HOSTS
 * 支持自动添加IPSET
