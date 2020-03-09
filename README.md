@@ -1,5 +1,8 @@
 # Telescope DNS
-带GFWList & socks5代理 & 反污染功能的DNS分流器
+* 支持多hosts文件 + 手动指定hosts
+* 支持按手动后缀匹配/半智能污染检测/GFWList进行分组
+* DNS查询支持socks5代理
+
 ![](arch.png)
 
 ## 编译&使用
