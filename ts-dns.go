@@ -221,7 +221,7 @@ func initConfig() {
 			log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
 		}
 	}
-	// 读取hosts
+	// 读取hosts file
 	if filename := mainSec.Key("hosts").String(); filename != "" {
 		if raw, err := ioutil.ReadFile(filename); err != nil {
 			log.Fatalf("[CRITICAL] hosts file read error: %v\n", err)
@@ -240,6 +240,14 @@ func initConfig() {
 					}
 				}
 			}
+		}
+	}
+	// 读取hosts section
+	for key, val := range config.Section("hosts").KeysHash() {
+		if key != "" && key[len(key)-1] != '.' {
+			hostsMap[key+"."] = val
+		} else if key != "" {
+			hostsMap[key] = val
 		}
 	}
 	// 服务器和规则列表
