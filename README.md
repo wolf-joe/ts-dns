@@ -2,6 +2,7 @@
 * 支持多hosts文件 + 手动指定hosts
 * 支持按手动后缀匹配/半智能污染检测/GFWList进行分组
 * DNS查询支持socks5代理
+* 简单DNS缓存
 
 ![](arch.png)
 
@@ -37,6 +38,5 @@ listen = ":53"
 
 ## TODO
 
-* GoReleaser
 * 智能DNS缓存
 * 自动添加IPSET
