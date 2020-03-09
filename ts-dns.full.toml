@@ -2,26 +2,41 @@
 # https://github.com/wolf-joe/ts-dns
 
 listen = ":53"
+# gfwlist文件路径，可下载https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
+# 推荐设置以提升使用体验
 gfwlist = "gfwlist.txt"
+# hosts文件路径，支持多hosts
 hosts_files = ["/etc/hosts"]
 
+# redis相关，可不使用
 [redis]
 host = "localhost:6379"
 password = ""
 db = 10
 
+# 手动hosts
 [hosts]
 "example.com" = "8.8.8.8"
 
+# 域名分组
 [groups]
+  # clean组域名，包括gfwlist规则里声明的例外域名、经检测未被污染的域名
   [groups.clean]
+  # 推荐用国内dns解析
   dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
 
+  # dirty组域名，包括gfwlist规则里提到的域名、经检测被污染的域名
   [groups.dirty]
+  # 当使用国外53端口dns解析时推荐用socks5代理解析
   socks5 = "127.0.0.1:1080"
+  # 如不想用socks5代理解析时推荐使用国外非53端口dns，或自建dnscrypt-proxy
   dns = ["8.8.8.8", "1.1.1.1"]
+  # 域名后缀列表，符合以下后缀的域名强制归类为dirty组
+  # 现有域名污染检测机制不够完善，不能正常检测以下域名是否被污染，当不使用gfwlist时需要维护该列表
   suffix = ["google.com", "twimg.com", "quoracdn.net"]
 
+  # 以下为自定义域名组，用于其它情况
+  # 比如办公网内，内外域名（company.com）用内网dns（10.1.1.1）解析
   [groups.work]
   dns = ["10.1.1.1"]
   suffix = ["company.com"]
