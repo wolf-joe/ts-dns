@@ -43,8 +43,6 @@ archives:
         format: zip
     files:
       - ts-dns*.toml
-checksum:
-  name_template: 'checksums.txt'
 snapshot:
   name_template: "{{ .Tag }}"
 changelog:

@@ -6,13 +6,13 @@
 
 ![](arch.png)
 
-## 编译&使用
+## 使用说明
 
-```shell
-go build -o ts-dns *.go
-# ./ts-dns -c ts-dns.toml
-./ts-dns
-```
+* 在[release页](https://github.com/wolf-joe/ts-dns/releases)下载软件包
+* 解压后直接运行进程（使用默认配置，不推荐），或编辑自己的配置文件后运行进程：
+  ```shell
+  ./ts-dns -c ts-dns.toml
+  ```
 
 ## 配置说明
 
