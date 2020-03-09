@@ -66,9 +66,9 @@ func (gfw *GFWList) Init(filename string) (*GFWList, error) {
 	return gfw, nil
 }
 
+// 如域名在gfwlist名单内，返回dirty（域名被阻隔）/clean（域名未被阻隔），否则返回空串。
+// 简单判断后缀，功能待完善。
 func (gfw *GFWList) getGroupName(domain string) string {
-	// 如域名在gfwlist名单内，返回dirty（域名被阻隔）/clean（域名未被阻隔），否则返回空串
-	// 简单判断后缀，功能待完善
 	if gfw == nil {
 		return ""
 	}

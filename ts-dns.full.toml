@@ -1,0 +1,27 @@
+# Telescope DNS Configure File
+# https://github.com/wolf-joe/ts-dns
+
+listen = ":53"
+gfwlist = "gfwlist.txt"
+hosts_files = ["/etc/hosts"]
+
+[redis]
+host = "localhost:6379"
+password = ""
+db = 10
+
+[hosts]
+"example.com" = "8.8.8.8"
+
+[groups]
+  [groups.clean]
+  dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
+
+  [groups.dirty]
+  socks5 = "127.0.0.1:1080"
+  dns = ["8.8.8.8", "1.1.1.1"]
+  suffix = ["google.com", "twimg.com", "quoracdn.net"]
+
+  [groups.work]
+  dns = ["10.1.1.1"]
+  suffix = ["company.com"]
