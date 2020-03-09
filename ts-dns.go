@@ -112,7 +112,7 @@ func getGroupName(domain string) string {
 
 	// 判断gfwlist
 	if groupName := gfwList.getGroupName(domain); groupName != "" {
-		log.Printf("[INFO] %s match gfwlist\n", domain)
+		log.Printf("[INFO] %s match gfwlist: %s\n", domain, groupName)
 		return groupName
 	}
 
@@ -166,8 +166,9 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		log.Fatalln("[CRITICAL] recursive query") // 防止递归
 	}
 	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
-	if val, ok := hostsMap[question.Name]; ok {
-		record := fmt.Sprintf("%s 3600 IN A %s", question.Name, val)
+	// 判断域名是否存在于hosts内
+	if val, ok := hostsMap[question.Name]; ok && question.Qtype == dns.TypeA {
+		record := fmt.Sprintf("%s 0 IN A %s", question.Name, val)
 		if ret, err := dns.NewRR(record); err != nil {
 			log.Printf("[ERROR] make dns.RR error: %v\n", err)
 		} else {
@@ -220,7 +221,7 @@ func initConfig() {
 			log.Fatalf("[CRITICAL] gfwlist read error: %v\n", err)
 		}
 	}
-	// hosts file
+	// 读取hosts
 	if filename := mainSec.Key("hosts").String(); filename != "" {
 		if raw, err := ioutil.ReadFile(filename); err != nil {
 			log.Fatalf("[CRITICAL] hosts file read error: %v\n", err)
@@ -232,7 +233,11 @@ func initConfig() {
 				}
 				split := func(r rune) bool { return r == ' ' || r == '\t' }
 				if arr := strings.FieldsFunc(line, split); len(arr) >= 2 {
-					hostsMap[arr[1]+"."] = arr[0]
+					if arr[1][len(arr)-1] != '.' {
+						hostsMap[arr[1]+"."] = arr[0]
+					} else {
+						hostsMap[arr[1]] = arr[0]
+					}
 				}
 			}
 		}
