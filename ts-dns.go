@@ -13,14 +13,11 @@ import (
 )
 
 var dnsClient = new(dns.Client)
-var queryCache = new(TTLMap).Init(60)
 
 func queryDns(question dns.Question, server string, dialer proxy.Dialer) (r *dns.Msg, err error) {
 	// 查询缓存
-	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if cacheHit, ok := queryCache.Get(cacheKey); ok {
-		log.Printf("[INFO] query cache hit\n")
-		return cacheHit.(*dns.Msg), nil
+	if r = getDNSCache(question); r != nil {
+		return r, nil
 	}
 	msg := dns.Msg{}
 	msg.SetQuestion(question.Name, question.Qtype)
@@ -28,9 +25,7 @@ func queryDns(question dns.Question, server string, dialer proxy.Dialer) (r *dns
 	var proxyConn net.Conn
 	// 返回前缓存查询结果并关闭代理连接
 	defer func() {
-		if r != nil {
-			queryCache.Set(cacheKey, r, time.Minute)
-		}
+		setDNSCache(question, r)
 		if proxyConn != nil {
 			_ = proxyConn.Close()
 		}
@@ -93,7 +88,7 @@ func getGroupName(domain string) string {
 	// 优先检测预设规则
 	for suffix, groupName := range suffixMap {
 		if strings.HasSuffix(domain, suffix) {
-			log.Printf("[INFO] %s match suffix %s\n", domain, suffix)
+			log.Printf("[INFO] %s match suffix %s of group %s\n", domain, suffix, groupName)
 			return groupName
 		}
 	}
