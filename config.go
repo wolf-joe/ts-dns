@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./TTLMap"
 	"flag"
 	"github.com/BurntSushi/toml"
 	"github.com/go-redis/redis"
@@ -15,7 +16,6 @@ var groupS5Map = map[string]proxy.Dialer{}
 var hostsMap = map[string]string{}
 var gfwList *GFWList
 var config tsDNSConfig
-var groupCache interface{}
 
 type tsDNSConfig struct {
 	Listen      string
@@ -124,6 +124,6 @@ func initConfig() {
 			log.Printf("[WARNING] connect redis://%s/%d success\n", rds.Host, rds.DB)
 		}
 	} else {
-		groupCache = new(TTLMap).Init(60)
+		groupCache = new(TTLMap.TTLMap).Init(60)
 	}
 }

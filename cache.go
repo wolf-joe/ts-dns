@@ -1,6 +1,8 @@
 package main
 
 import (
+	"./TTLMap"
+	"github.com/go-redis/redis"
 	"github.com/miekg/dns"
 	"strconv"
 	"time"
@@ -12,7 +14,8 @@ const (
 	CacheMaxTTL = 86400
 )
 
-var dnsCache = new(TTLMap).Init(60)
+var dnsCache = new(TTLMap.TTLMap).Init(60)
+var groupCache interface{}
 
 func getDNSCache(question dns.Question) *dns.Msg {
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
@@ -23,7 +26,7 @@ func getDNSCache(question dns.Question) *dns.Msg {
 }
 
 func setDNSCache(question dns.Question, r *dns.Msg) {
-	if r == nil || len(dnsCache.itemMap) >= CacheSize {
+	if dnsCache.Len() >= CacheSize || r == nil || len(r.Answer) <= 0 {
 		return
 	}
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
@@ -37,4 +40,27 @@ func setDNSCache(question dns.Question, r *dns.Msg) {
 		ex = CacheMinTTL
 	}
 	dnsCache.Set(cacheKey, r, time.Duration(ex)*time.Second)
+}
+
+func getGroupCache(domain string) (group string) {
+	var cacheHit interface{}
+	switch groupCache.(type) {
+	case *redis.Client:
+		// get redis key时忽略错误，因为作者无法区分"key不存在"和其它错误
+		cacheHit, _ = groupCache.(*redis.Client).Get(domain).Result()
+	default:
+		cacheHit, _ = groupCache.(*TTLMap.TTLMap).Get(domain)
+	}
+	return cacheHit.(string)
+}
+
+func setGroupCache(domain string, group string) (err error) {
+	ex := time.Hour * 24
+	switch groupCache.(type) {
+	case *redis.Client:
+		return groupCache.(*redis.Client).Set(domain, group, ex).Err()
+	default:
+		groupCache.(*TTLMap.TTLMap).Set(domain, group, ex)
+		return nil
+	}
 }

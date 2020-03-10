@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-redis/redis"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 	"log"
@@ -48,17 +47,6 @@ func queryDns(question dns.Question, server string, dialer proxy.Dialer) (r *dns
 	}
 }
 
-func setGroupCache(domain string, group string) error {
-	ex := time.Hour * 24
-	switch groupCache.(type) {
-	case *redis.Client:
-		return groupCache.(*redis.Client).Set(domain, group, ex).Err()
-	default:
-		groupCache.(*TTLMap).Set(domain, group, ex)
-		return nil
-	}
-}
-
 func isPolluted(domain string) (polluted bool, err error) {
 	// 向clean组dns服务器（推荐设置为公共DNS）发送请求来判定域名是否被污染
 	domain = "ne-" + strconv.FormatInt(time.Now().UnixNano(), 16) + "." + domain
@@ -100,16 +88,9 @@ func getGroupName(domain string) string {
 	}
 
 	// 从缓存中读取前次判断结果
-	var cacheHit interface{}
-	switch groupCache.(type) {
-	case *redis.Client:
-		// get redis key时忽略错误，因为作者无法区分"key不存在"和其它错误
-		cacheHit, _ = groupCache.(*redis.Client).Get(domain).Result()
-	default:
-		cacheHit, _ = groupCache.(*TTLMap).Get(domain)
-	}
-	if _, ok := config.Groups[cacheHit.(string)]; ok {
-		return cacheHit.(string) // 如果缓存内的groupName有效则直接返回
+	cache := getGroupCache(domain)
+	if _, ok := config.Groups[cache]; ok {
+		return cache // 如果缓存内的groupName有效则直接返回
 	}
 
 	// 判断域名是否受到污染，并按污染结果将域名分组

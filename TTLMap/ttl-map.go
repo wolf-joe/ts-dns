@@ -1,4 +1,4 @@
-package main
+package TTLMap
 
 import (
 	"sync"
