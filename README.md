@@ -4,47 +4,82 @@
 * DNS查询支持socks5代理
 * DNS记录缓存
 
-## 整体结构
+> 整体结构：
   ![](images/arch.png)
-## 分组机制
+> 分组机制：
   ![](images/grouping.png)
 
 ## 使用说明
 
 * 在[release页](https://github.com/wolf-joe/ts-dns/releases)下载软件包；
-* 解压后直接运行进程（使用默认配置，不推荐），或编辑自己的配置文件后运行进程：
+* 解压后按需求编辑配置文件（可选）后运行进程：
   ```shell
-  # ./ts-dns -c ts-dns.toml
   ./ts-dns
   ```
 
-## 配置说明
+## 配置示例
 
+> 完整配置文件参见`ts-dns.full.toml`
 
-```toml
-listen = ":53"
+1. 默认配置（`ts-dns.toml`），开箱即用
+  ```toml
+  listen = ":53"
 
-[groups]
-  [groups.clean]
-  dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
+  [groups]
+    [groups.clean]
+    dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
 
-  [groups.dirty]
-  dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
-  suffix = ["google.com", "twimg.com", "quoracdn.net"]
-```
+    [groups.dirty]
+    dns = [""]  # 省略
+    suffix = ["google.com", "twimg.com", "quoracdn.net"]
+  ```
 
-* 完整配置文件见`ts-dns.full.toml`。
-* `gfwlist.txt`参考`https://github.com/gfwlist/gfwlist/raw/master/gfwlist.txt`。
-* 反污染功能无法关闭。如不想使用该功能可将`clean`组和`dirty`组中的`dns`设为相同值。
-* 当配置了`redis`时，本程序将使用`Redis`作为污染检测结果缓存，反之则使用内置的`TTLMap`作为缓存。
-* 污染检测机制尚不完善，目前已知无法正确判定是否被污染的域名如上文`dirty`组里的`suffix`所示。推荐使用`GFWList`实现更好的准确度。
-* `dirty`组DNS里的地址推荐设置为自建的`dnscrypt-proxy`（即搭配DOH/DOT使用）或使用`socks5`代理。
+2. 使用自定义hosts文件
+  ```toml
+  listen = ":53"
+  hosts_files = ["adaway.txt"]
+  # 其余同默认配置
+  ```
+
+3. 使用`GFWList`提高分组准确度
+  ```toml
+  listen = ":53"
+  gfwlist = "gfwlist.txt"
+  # 其余同默认配置
+  ```
+
+4. 自定义域名解析
+  ```toml
+  # 其余同默认配置
+  [hosts]
+  "www.example.com" = "1.1.1.1"
+  ```
+
+5. 使用socks5代理解决DNS污染问题
+  ```toml
+  # 其余同默认配置
+  
+    [groups.dirty]
+    dns = ["8.8.8.8", "1.1.1.1"]
+    socks5 = "127.0.0.1:1080"
+  ```
+
+6. 自定义域名分组
+  ```toml
+  # 其余同默认配置
+    [groups.work]
+    dns = ["10.1.1.1"]
+    suffix = ["company.com"]
+  ```
+
 
 ## TODO
 
 * DNS响应择优
 * 自动添加IPSET
+* DNS缓存预取
 * DNS over HTTPS/TLS/TCP等支持
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
+* [github.com/gfwlist/gfwlist](https://github.com/gfwlist/gfwlist)

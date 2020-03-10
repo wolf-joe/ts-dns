@@ -8,24 +8,22 @@ gfwlist = "gfwlist.txt"
 # hosts文件路径，支持多hosts
 hosts_files = ["/etc/hosts"]
 
-# redis相关，可不使用
+# redis相关（作为污染检测结果缓存），可不使用
 [redis]
 host = "localhost:6379"
 password = ""
 db = 10
 
-# 手动hosts
+# 自定义域名映射
 [hosts]
 "example.com" = "8.8.8.8"
 
 # 域名分组
 [groups]
-  # clean组域名，包括gfwlist规则里声明的例外域名、经检测未被污染的域名
   [groups.clean]
   # 推荐用国内dns解析
   dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
 
-  # dirty组域名，包括gfwlist规则里提到的域名、经检测被污染的域名
   [groups.dirty]
   # 当使用国外53端口dns解析时推荐用socks5代理解析
   socks5 = "127.0.0.1:1080"
