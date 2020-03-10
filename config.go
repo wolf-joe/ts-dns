@@ -16,7 +16,6 @@ import (
 var VERSION = "Unknown"
 
 var suffixMap = map[string]string{}
-var groupS5Map = map[string]proxy.Dialer{}
 var hostsMap = map[string]string{}
 var gfwList *GFWList
 var config tsDNSConfig
@@ -38,6 +37,7 @@ type redisConfig struct {
 
 type groupConfig struct {
 	Socks5 string
+	Dialer proxy.Dialer
 	DNS    []string
 	Suffix []string
 }
@@ -101,8 +101,8 @@ func initConfig() {
 			}
 		}
 		if group.Socks5 != "" {
-			s5dialer, _ := proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
-			groupS5Map[groupName] = s5dialer
+			group.Dialer, _ = proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
+			config.Groups[groupName] = group
 		}
 		for i, addr := range group.DNS {
 			if addr != "" && !strings.Contains(addr, ":") {

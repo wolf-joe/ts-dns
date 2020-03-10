@@ -49,7 +49,8 @@ func isPolluted(domain string) (polluted bool, err error) {
 	log.Println("[DEBUG] check pollute: " + domain)
 	var r *dns.Msg
 	for _, server := range config.Groups["clean"].DNS {
-		r, err = queryDns(dns.Question{Name: domain, Qtype: dns.TypeA}, server, groupS5Map["clean"])
+		question := dns.Question{Name: domain, Qtype: dns.TypeA}
+		r, err = queryDns(question, server, config.Groups["clean"].Dialer)
 		if err != nil {
 			log.Printf("[ERROR] query dns error: %v\n", err)
 		}
@@ -145,13 +146,15 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var err error
 	groupName, reason := getGroupName(question.Name)
 	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", groupName, reason))
-	for _, server := range config.Groups[groupName].DNS { // 遍历DNS服务器
-		r, err = queryDns(question, server, groupS5Map[groupName]) // 发送查询请求
-		if err != nil {
-			log.Printf("[ERROR] query dns error: %v\n", err)
-		}
-		if r != nil {
-			return
+	if group, ok := config.Groups[groupName]; ok {
+		for _, server := range group.DNS { // 遍历DNS服务器
+			r, err = queryDns(question, server, group.Dialer) // 发送查询请求
+			if err != nil {
+				log.Printf("[ERROR] query dns error: %v\n", err)
+			}
+			if r != nil {
+				break
+			}
 		}
 	}
 }
