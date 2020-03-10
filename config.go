@@ -44,22 +44,7 @@ func initConfig() {
 	flag.StringVar(&cfgPath, "c", "ts-dns.toml", "Config File Path")
 	flag.Parse()
 	if _, err := toml.DecodeFile(cfgPath, &config); err != nil {
-		log.Printf("[ERROR] read config error: %v\n", err)
-		// 缺少配置则载入默认配置
-		defaultDNSMap := map[string][]string{
-			"clean": {"119.29.29.29:53", "223.5.5.5:53"},
-			"dirty": {"208.67.222.222:5353", "176.103.130.130:5353"},
-		}
-		suffixMap["google.com."] = "dirty"
-		suffixMap["twimg.com."] = "dirty"
-		suffixMap["quoracdn.net"] = "dirty"
-		config.Groups = map[string]groupConfig{}
-		config.Listen = ":53"
-		for groupName, defaultDNS := range defaultDNSMap {
-			if group, ok := config.Groups[groupName]; !ok || len(group.DNS) <= 0 {
-				config.Groups[groupName] = groupConfig{DNS: defaultDNS}
-			}
-		}
+		log.Fatalf("[ERROR] read config error: %v\n", err)
 	}
 	// 读取gfwlist
 	var err error
@@ -125,5 +110,9 @@ func initConfig() {
 		}
 	} else {
 		groupCache = new(TTLMap.TTLMap).Init(60)
+	}
+	// 检测配置有效性
+	if len(config.Groups) <= 0 || len(config.Groups["clean"].DNS) <= 0 || len(config.Groups["dirty"].DNS) <= 0 {
+		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")
 	}
 }
