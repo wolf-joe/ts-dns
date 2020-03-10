@@ -1,6 +1,6 @@
 # Telescope DNS
+* 支持按手动后缀匹配/GFWList/半智能污染检测进行分组
 * 支持多hosts文件 + 手动指定hosts
-* 支持按手动后缀匹配/半智能污染检测/GFWList进行分组
 * DNS查询支持socks5代理
 * DNS记录缓存
 
@@ -38,4 +38,9 @@ listen = ":53"
 
 ## TODO
 
+* DNS响应择优
 * 自动添加IPSET
+* DNS over HTTPS/TLS/TCP等支持
+
+## 特别鸣谢
+* [github.com/arloan/prdns](https://github.com/arloan/prdns)
