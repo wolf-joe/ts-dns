@@ -42,6 +42,8 @@ archives:
       - goos: windows
         format: zip
     files:
+      - README*.md
+      - LICENSE
       - ts-dns*.toml
 snapshot:
   name_template: "{{ .Tag }}"
