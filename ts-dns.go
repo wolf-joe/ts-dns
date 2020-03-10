@@ -156,6 +156,18 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 				break
 			}
 		}
+		// 将查询到的ip写入对应IPSet
+		if group.IPSet != nil {
+			for _, answer := range r.Answer {
+				switch answer.(type) {
+				case *dns.A:
+					ip := answer.(*dns.A).A.String()
+					if err = group.IPSet.Add(ip, group.IPSetTTL); err != nil {
+						log.Printf("[ERROR] add %s to IPSet error: %v\n", ip, err)
+					}
+				}
+			}
+		}
 	}
 }
 

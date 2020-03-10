@@ -3,6 +3,7 @@
 * 支持多hosts文件 + 手动指定hosts
 * DNS查询支持socks5代理
 * DNS记录缓存
+* 自动添加IPSet记录
 
 > 整体结构：
   ![](images/arch.png)
@@ -58,7 +59,6 @@
 5. 使用socks5代理解决DNS污染问题
   ```toml
   # 其余同默认配置
-  
     [groups.dirty]
     dns = ["8.8.8.8", "1.1.1.1"]
     socks5 = "127.0.0.1:1080"
@@ -72,11 +72,20 @@
     suffix = ["company.com"]
   ```
 
+7. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
+  ```toml
+  # 其余同默认配置
+    [groups.dirty]
+    dns = [""]  # 省略
+    suffix = ["google.com", "twimg.com", "quoracdn.net"]
+    ipset = "blocked"
+    ipset_ttl = 86400
+  ```
+
 
 ## TODO
 
 * DNS响应择优
-* 自动添加IPSET
 * DNS缓存预取
 * DNS over HTTPS/TLS/TCP等支持
 

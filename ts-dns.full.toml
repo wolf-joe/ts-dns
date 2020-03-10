@@ -33,6 +33,12 @@ db = 10
   # 现有域名污染检测机制不够完善，不能正常检测以下域名是否被污染，当不使用gfwlist时需要维护该列表
   suffix = ["google.com", "twimg.com", "quoracdn.net"]
 
+  # 目标ipset名称，该下所有域名的ipv4解析结果将加入到该ipset中
+  # 警告：进程启动时会覆盖同名IPSet
+  ipset = "blocked"
+  # ipset记录超时时间，单位为秒，推荐设置以避免ipset记录过多
+  ipset_ttl = 86400
+
   # 以下为自定义域名组，用于其它情况
   # 比如办公网内，内外域名（company.com）用内网dns（10.1.1.1）解析
   [groups.work]

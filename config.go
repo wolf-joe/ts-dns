@@ -2,6 +2,7 @@ package main
 
 import (
 	"./TTLMap"
+	"./ipset"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -36,10 +37,13 @@ type redisConfig struct {
 }
 
 type groupConfig struct {
-	Socks5 string
-	Dialer proxy.Dialer
-	DNS    []string
-	Suffix []string
+	Socks5    string
+	Dialer    proxy.Dialer
+	IPSetName string `toml:"ipset"`
+	IPSetTTL  int    `toml:"ipset_ttl"`
+	IPSet     *ipset.IPSet
+	DNS       []string
+	Suffix    []string
 }
 
 func initConfig() {
@@ -91,7 +95,7 @@ func initConfig() {
 			hostsMap[domain] = ip
 		}
 	}
-	// 读取suffix和socks5代理地址，并为DNS地址加上默认端口
+	// 读取每个组的suffix、socks5、ipset，并为DNS地址加上默认端口
 	for groupName, group := range config.Groups {
 		for _, suffix := range group.Suffix {
 			if suffix != "" && suffix[len(suffix)-1] != '.' {
@@ -108,6 +112,16 @@ func initConfig() {
 			if addr != "" && !strings.Contains(addr, ":") {
 				group.DNS[i] = addr + ":53"
 			}
+		}
+		if group.IPSetName != "" {
+			if group.IPSetTTL < 0 {
+				group.IPSetTTL = 0
+			}
+			group.IPSet, err = ipset.New(group.IPSetName, "hash:ip", &ipset.Params{})
+			if err != nil {
+				log.Fatalf("[CRITICAL] create ipset error: %v\n", err)
+			}
+			config.Groups[groupName] = group
 		}
 	}
 	// 读取redis
