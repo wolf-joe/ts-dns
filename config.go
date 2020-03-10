@@ -44,7 +44,7 @@ func initConfig() {
 	flag.StringVar(&cfgPath, "c", "ts-dns.toml", "Config File Path")
 	flag.Parse()
 	if _, err := toml.DecodeFile(cfgPath, &config); err != nil {
-		log.Fatalf("[ERROR] read config error: %v\n", err)
+		log.Fatalf("[CRITICAL] read config error: %v\n", err)
 	}
 	// 读取gfwlist
 	var err error

@@ -60,7 +60,9 @@ func setGroupCache(domain string, group string) (err error) {
 	case *redis.Client:
 		return groupCache.(*redis.Client).Set(domain, group, ex).Err()
 	default:
-		groupCache.(*TTLMap.TTLMap).Set(domain, group, ex)
+		if groupCache.(*TTLMap.TTLMap).Len() < CacheSize {
+			groupCache.(*TTLMap.TTLMap).Set(domain, group, ex)
+		}
 		return nil
 	}
 }

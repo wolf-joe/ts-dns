@@ -14,10 +14,6 @@ import (
 var dnsClient = new(dns.Client)
 
 func queryDns(question dns.Question, server string, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	// 查询缓存
-	if r = getDNSCache(question); r != nil {
-		return r, nil
-	}
 	msg := dns.Msg{}
 	msg.SetQuestion(question.Name, question.Qtype)
 
@@ -71,26 +67,24 @@ func isPolluted(domain string) (polluted bool, err error) {
 	return false, err
 }
 
-func getGroupName(domain string) string {
+func getGroupName(domain string) (group string, reason string) {
 	// 判断目标域名所在的分组
 	// 优先检测预设规则
-	for suffix, groupName := range suffixMap {
+	for suffix, group := range suffixMap {
 		if strings.HasSuffix(domain, suffix) {
-			log.Printf("[INFO] %s match suffix %s of group %s\n", domain, suffix, groupName)
-			return groupName
+			return group, "suffix " + suffix
 		}
 	}
 
 	// 判断gfwlist
-	if groupName := gfwList.getGroupName(domain); groupName != "" {
-		log.Printf("[INFO] %s match gfwlist: %s\n", domain, groupName)
-		return groupName
+	if group = gfwList.getGroupName(domain); group != "" {
+		return group, "GFWList"
 	}
 
 	// 从缓存中读取前次判断结果
-	cache := getGroupCache(domain)
-	if _, ok := config.Groups[cache]; ok {
-		return cache // 如果缓存内的groupName有效则直接返回
+	group = getGroupCache(domain)
+	if _, ok := config.Groups[group]; ok {
+		return group, "pollute cache" // 如果缓存内的groupName有效则直接返回
 	}
 
 	// 判断域名是否受到污染，并按污染结果将域名分组
@@ -102,14 +96,14 @@ func getGroupName(domain string) string {
 	}()
 	if polluted, err := isPolluted(domain); err != nil {
 		log.Printf("[ERROR] check polluted error: %v\n", err)
-		return "clean"
+		return "clean", "pollute detect err"
 	} else if polluted {
 		log.Printf("[WARNING] %s polluted\n", domain)
 		setErr = setGroupCache(domain, "dirty")
-		return "dirty"
+		return "dirty", "pollute detect"
 	} else {
 		setErr = setGroupCache(domain, "clean")
-		return "clean"
+		return "clean", "pollute detect"
 	}
 }
 
@@ -129,7 +123,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	if strings.Count(question.Name, ".ne-") > 1 {
 		log.Fatalln("[CRITICAL] recursive query") // 防止递归
 	}
-	log.Printf("[INFO] query %s from %s\n", question.Name, resp.RemoteAddr().String())
+	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
 	if val, ok := hostsMap[question.Name]; ok && question.Qtype == dns.TypeA {
 		record := fmt.Sprintf("%s 0 IN A %s", question.Name, val)
@@ -139,11 +133,18 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			r = new(dns.Msg)
 			r.Answer = append(r.Answer, ret)
 		}
+		log.Println(msg + "match hosts")
+		return
+	}
+	// 检测dns缓存是否命中
+	if r = getDNSCache(question); r != nil {
+		log.Println(msg + "hit cache")
 		return
 	}
 
 	var err error
-	groupName := getGroupName(question.Name)
+	groupName, reason := getGroupName(question.Name)
+	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", groupName, reason))
 	for _, server := range config.Groups[groupName].DNS { // 遍历DNS服务器
 		r, err = queryDns(question, server, groupS5Map[groupName]) // 发送查询请求
 		if err != nil {
@@ -161,6 +162,6 @@ func main() {
 	srv.Handler = &handler{}
 	log.Printf("[WARNING] listen on %s/udp\n", config.Listen)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("[CITICAL] Failed to set udp listener %s\n", err.Error())
+		log.Fatalf("[CRITICAL] liten udp error: %v\n", err)
 	}
 }
