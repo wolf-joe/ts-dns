@@ -3,13 +3,17 @@ package main
 import (
 	"./TTLMap"
 	"flag"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/go-redis/redis"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 )
+
+var VERSION = "Unknown"
 
 var suffixMap = map[string]string{}
 var groupS5Map = map[string]proxy.Dialer{}
@@ -41,8 +45,14 @@ type groupConfig struct {
 func initConfig() {
 	// 读取配置文件
 	var cfgPath string
-	flag.StringVar(&cfgPath, "c", "ts-dns.toml", "Config File Path")
+	var version bool
+	flag.StringVar(&cfgPath, "c", "ts-dns.toml", "config file path")
+	flag.BoolVar(&version, "v", false, "show version and exit")
 	flag.Parse()
+	if version {
+		fmt.Println(VERSION)
+		os.Exit(0)
+	}
 	if _, err := toml.DecodeFile(cfgPath, &config); err != nil {
 		log.Fatalf("[CRITICAL] read config error: %v\n", err)
 	}
