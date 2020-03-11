@@ -74,14 +74,18 @@ type FileReader struct {
 }
 
 func (r *FileReader) reload() {
+	r.mux.Lock()
+	defer r.mux.Unlock()
 	if time.Now().Before(r.timestamp.Add(r.timeout)) {
 		return
 	}
 	// read host file again
-	nr, _ := NewFileReader(r.filename, r.timeout)
-	r.mux.Lock()
-	r.reader, r.timestamp = nr.reader, nr.timestamp
-	r.mux.Unlock()
+	nr, err := NewFileReader(r.filename, r.timeout)
+	// 当hosts文件读取失败时不更新内存中已有hosts记录
+	if err == nil {
+		r.reader = nr.reader
+	}
+	r.timestamp = time.Now()
 }
 func (r *FileReader) V4(hostname string) string {
 	r.reload()
