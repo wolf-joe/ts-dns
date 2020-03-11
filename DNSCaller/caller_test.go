@@ -38,3 +38,10 @@ func TestUDPCaller(t *testing.T) {
 	r, err = caller.Call(question, []dns.RR{}, fakeDialer)
 	assertFail(t, r, err)
 }
+
+func TestTCPCaller(t *testing.T) {
+	address := "8.8.8.8:53"
+	caller := TCPCaller{address: address}
+	r, err := caller.Call(question, []dns.RR{}, nil)
+	assertSuccess(t, r, err)
+}

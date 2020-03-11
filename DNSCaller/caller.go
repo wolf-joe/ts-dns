@@ -6,17 +6,14 @@ import (
 	"net"
 )
 
-var dnsClient = new(dns.Client)
+var udpClient = dns.Client{Net: "udp"}
+var tcpClient = dns.Client{Net: "tcp"}
 
 type Caller interface {
 	Call(question dns.Question, extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error)
 }
 
-type UDPCaller struct {
-	address string
-}
-
-func (caller *UDPCaller) Call(question dns.Question,
+func call(client dns.Client, address string, question dns.Question,
 	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
 	msg := dns.Msg{}
 	msg.Extra = extra
@@ -31,7 +28,7 @@ func (caller *UDPCaller) Call(question dns.Question,
 	}()
 	if dialer != nil {
 		// 使用代理连接DNS服务器
-		if proxyConn, err = dialer.Dial("tcp", caller.address); err != nil {
+		if proxyConn, err = dialer.Dial("tcp", address); err != nil {
 			return nil, err
 		} else {
 			conn := &dns.Conn{Conn: proxyConn}
@@ -42,7 +39,25 @@ func (caller *UDPCaller) Call(question dns.Question,
 		}
 	} else {
 		// 不使用代理
-		r, _, err = dnsClient.Exchange(&msg, caller.address)
+		r, _, err = client.Exchange(&msg, address)
 		return r, err
 	}
+}
+
+type UDPCaller struct {
+	address string
+}
+
+func (caller *UDPCaller) Call(question dns.Question,
+	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
+	return call(udpClient, caller.address, question, extra, dialer)
+}
+
+type TCPCaller struct {
+	address string
+}
+
+func (caller *TCPCaller) Call(question dns.Question,
+	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
+	return call(tcpClient, caller.address, question, extra, dialer)
 }
