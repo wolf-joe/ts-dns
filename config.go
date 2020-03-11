@@ -2,8 +2,8 @@ package main
 
 import (
 	"./Hosts"
+	"./IPSet"
 	"./TTLMap"
-	"./ipset"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 var VERSION = "Unknown"
@@ -122,7 +123,7 @@ func initConfig() {
 			log.Printf("[WARNING] connect redis://%s/%d success\n", rds.Host, rds.DB)
 		}
 	} else {
-		groupCache = new(TTLMap.TTLMap).Init(60)
+		groupCache = TTLMap.NewMap(time.Minute)
 	}
 	// 检测配置有效性
 	if len(config.Groups) <= 0 || len(config.Groups["clean"].DNS) <= 0 || len(config.Groups["dirty"].DNS) <= 0 {

@@ -14,7 +14,7 @@ const (
 	CacheMaxTTL = 86400
 )
 
-var dnsCache = new(TTLMap.TTLMap).Init(60)
+var dnsCache = TTLMap.NewMap(time.Minute)
 var groupCache interface{}
 
 func getDNSCache(question dns.Question) *dns.Msg {
