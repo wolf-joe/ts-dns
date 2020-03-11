@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./Hosts"
 	"./TTLMap"
 	"./ipset"
 	"flag"
@@ -8,7 +9,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/go-redis/redis"
 	"golang.org/x/net/proxy"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -17,9 +17,9 @@ import (
 var VERSION = "Unknown"
 
 var suffixMap = map[string]string{}
-var hostsMap = map[string]string{}
 var gfwList *GFWList
 var config tsDNSConfig
+var hostsReaders []Hosts.Reader
 
 type tsDNSConfig struct {
 	Listen      string
@@ -67,32 +67,21 @@ func initConfig() {
 			log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
 		}
 	}
-	// 读取hosts
-	for _, hostsFile := range config.HostsFiles {
-		if raw, err := ioutil.ReadFile(hostsFile); err != nil {
+	// 读取Hosts
+	var lines []string
+	for hostname, ip := range config.Hosts {
+		lines = append(lines, ip+" "+hostname)
+	}
+	if len(lines) > 0 {
+		text := strings.Join(lines, "\n")
+		hostsReaders = append(hostsReaders, Hosts.NewTextReader(text))
+	}
+	// 读取Hosts文件
+	for _, filename := range config.HostsFiles {
+		if reader, err := Hosts.NewFileReader(filename, 30); err != nil {
 			log.Printf("[WARNING] read hosts error: %v\n", err)
 		} else {
-			for _, line := range strings.Split(string(raw), "\n") {
-				line = strings.Trim(line, " \t\r")
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
-				splitter := func(r rune) bool { return r == ' ' || r == '\t' }
-				if arr := strings.FieldsFunc(line, splitter); len(arr) >= 2 {
-					if ip, domain := arr[0], arr[1]; domain[len(domain)-1] != '.' {
-						hostsMap[domain+"."] = ip
-					} else {
-						hostsMap[domain] = ip
-					}
-				}
-			}
-		}
-	}
-	for domain, ip := range config.Hosts {
-		if domain != "" && domain[len(domain)-1] != '.' {
-			hostsMap[domain+"."] = ip
-		} else if domain != "" {
-			hostsMap[domain] = ip
+			hostsReaders = append(hostsReaders, reader)
 		}
 	}
 	// 读取每个组的suffix、socks5、ipset，并为DNS地址加上默认端口

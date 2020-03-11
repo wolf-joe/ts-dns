@@ -126,17 +126,27 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
-	if val, ok := hostsMap[question.Name]; ok && question.Qtype == dns.TypeA {
-		record := fmt.Sprintf("%s 0 IN A %s", question.Name, val)
-		if ret, err := dns.NewRR(record); err != nil {
-			log.Printf("[ERROR] make dns.RR error: %v\n", err)
-		} else {
-			r = new(dns.Msg)
-			r.Answer = append(r.Answer, ret)
+	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
+		for _, reader := range hostsReaders {
+			// hostname为domain去掉末尾"."符号后的值
+			record, hostname := "", question.Name[:len(question.Name)-1]
+			if record = reader.GenRecord(hostname, question.Qtype); record == "" {
+				// 如hostname无对应的hosts记录，则用domain再找一次
+				record = reader.GenRecord(question.Name, question.Qtype)
+			}
+			if record != "" {
+				if ret, err := dns.NewRR(record); err != nil {
+					log.Printf("[ERROR] make dns.RR error: %v\n", err)
+				} else {
+					r = new(dns.Msg)
+					r.Answer = append(r.Answer, ret)
+				}
+				log.Println(msg + "match hosts")
+				return
+			}
 		}
-		log.Println(msg + "match hosts")
-		return
 	}
+
 	// 检测dns缓存是否命中
 	if r = getDNSCache(question); r != nil {
 		log.Println(msg + "hit cache")
