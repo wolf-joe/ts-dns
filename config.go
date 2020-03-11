@@ -80,7 +80,7 @@ func initConfig() {
 	}
 	// 读取Hosts文件
 	for _, filename := range config.HostsFiles {
-		if reader, err := Hosts.NewFileReader(filename, 30); err != nil {
+		if reader, err := Hosts.NewFileReader(filename, time.Second*10); err != nil {
 			log.Printf("[WARNING] read hosts error: %v\n", err)
 		} else {
 			hostsReaders = append(hostsReaders, reader)
