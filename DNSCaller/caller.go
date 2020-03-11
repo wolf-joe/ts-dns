@@ -9,7 +9,6 @@ import (
 
 var udpClient = dns.Client{Net: "udp"}
 var tcpClient = dns.Client{Net: "tcp"}
-var tlsClient = dns.Client{Net: "tcp-tls"}
 
 type Caller interface {
 	Call(question dns.Question, extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error)
@@ -28,22 +27,26 @@ func call(client dns.Client, address string, question dns.Question,
 			_ = proxyConn.Close()
 		}
 	}()
-	if dialer != nil {
-		// 使用代理连接DNS服务器
-		if proxyConn, err = dialer.Dial("tcp", address); err != nil {
-			return nil, err
-		} else {
-			conn := &dns.Conn{Conn: proxyConn}
-			if err = conn.WriteMsg(&msg); err != nil {
-				return nil, err
-			}
-			return conn.ReadMsg()
-		}
-	} else {
+	if dialer == nil {
 		// 不使用代理
 		r, _, err = client.Exchange(&msg, address)
 		return r, err
 	}
+	// 使用代理连接DNS服务器
+	if proxyConn, err = dialer.Dial("tcp", address); err != nil {
+		return nil, err
+	}
+	var conn *dns.Conn
+	if client.Net == "tcp" || client.Net == "udp" {
+		conn = &dns.Conn{Conn: proxyConn}
+	} else { // dns over tls
+		conn = &dns.Conn{Conn: tls.Client(proxyConn, client.TLSConfig)}
+	}
+	if err = conn.WriteMsg(&msg); err != nil {
+		return nil, err
+	}
+	return conn.ReadMsg()
+
 }
 
 type UDPCaller struct {
@@ -71,5 +74,6 @@ type TLSCaller struct {
 
 func (caller *TLSCaller) Call(question dns.Question,
 	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	return call(tlsClient, caller.address, question, extra, dialer)
+	client := dns.Client{Net: "tcp-tls", TLSConfig: caller.tlsConfig}
+	return call(client, caller.address, question, extra, dialer)
 }

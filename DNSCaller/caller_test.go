@@ -3,7 +3,6 @@ package DNSCaller
 import (
 	"crypto/tls"
 	"github.com/miekg/dns"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/proxy"
 	"os"
@@ -55,8 +54,5 @@ func TestTLSCaller(t *testing.T) {
 	r, err := caller.Call(question, []dns.RR{}, nil)
 	assertSuccess(t, r, err)
 	r, err = caller.Call(question, []dns.RR{}, s5dialer)
-	if err != nil {
-		log.Println(err)
-	}
 	assertSuccess(t, r, err)
 }
