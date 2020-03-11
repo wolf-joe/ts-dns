@@ -13,14 +13,16 @@ import (
 
 var dnsClient = new(dns.Client)
 
-func queryDns(question dns.Question, server string, dialer proxy.Dialer) (r *dns.Msg, err error) {
+func queryDns(question dns.Question, server string,
+	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
 	msg := dns.Msg{}
+	msg.Extra = extra
 	msg.SetQuestion(question.Name, question.Qtype)
 
 	var proxyConn net.Conn
 	// 返回前缓存查询结果并关闭代理连接
 	defer func() {
-		setDNSCache(question, r)
+		setDNSCache(question, extra, r)
 		if proxyConn != nil {
 			_ = proxyConn.Close()
 		}
@@ -50,7 +52,7 @@ func isPolluted(domain string) (polluted bool, err error) {
 	var r *dns.Msg
 	for _, server := range config.Groups["clean"].DNS {
 		question := dns.Question{Name: domain, Qtype: dns.TypeA}
-		r, err = queryDns(question, server, config.Groups["clean"].Dialer)
+		r, err = queryDns(question, server, []dns.RR{}, config.Groups["clean"].Dialer)
 		if err != nil {
 			log.Printf("[ERROR] query dns error: %v\n", err)
 		}
@@ -148,7 +150,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 检测dns缓存是否命中
-	if r = getDNSCache(question); r != nil {
+	if r = getDNSCache(question, request.Extra); r != nil {
 		log.Println(msg + "hit cache")
 		return
 	}
@@ -158,7 +160,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", groupName, reason))
 	if group, ok := config.Groups[groupName]; ok {
 		for _, server := range group.DNS { // 遍历DNS服务器
-			r, err = queryDns(question, server, group.Dialer) // 发送查询请求
+			r, err = queryDns(question, server, request.Extra, group.Dialer) // 发送查询请求
 			if err != nil {
 				log.Printf("[ERROR] query dns error: %v\n", err)
 			}
