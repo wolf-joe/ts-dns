@@ -66,21 +66,21 @@ func NewTextReader(text string) (r *TextReader) {
 }
 
 type FileReader struct {
-	mux       sync.Mutex
-	filename  string
-	timestamp time.Time
-	timeout   time.Duration
-	reader    *TextReader
+	mux        sync.Mutex
+	filename   string
+	timestamp  time.Time
+	reloadTick time.Duration
+	reader     *TextReader
 }
 
 func (r *FileReader) reload() {
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	if time.Now().Before(r.timestamp.Add(r.timeout)) {
+	if r.reloadTick <= 0 || time.Now().Before(r.timestamp.Add(r.reloadTick)) {
 		return
 	}
 	// read host file again
-	nr, err := NewFileReader(r.filename, r.timeout)
+	nr, err := NewFileReader(r.filename, r.reloadTick)
 	// 当hosts文件读取失败时不更新内存中已有hosts记录
 	if err == nil {
 		r.reader = nr.reader
@@ -99,12 +99,12 @@ func (r *FileReader) GenRecord(hostname string, t uint16) string {
 	r.reload()
 	return r.reader.GenRecord(hostname, t)
 }
-func NewFileReader(filename string, timeout time.Duration) (r *FileReader, err error) {
+func NewFileReader(filename string, reloadTick time.Duration) (r *FileReader, err error) {
 	var raw []byte
 	if raw, err = ioutil.ReadFile(filename); err != nil {
 		return
 	}
-	r = &FileReader{mux: sync.Mutex{}, filename: filename, timeout: timeout}
+	r = &FileReader{mux: sync.Mutex{}, filename: filename, reloadTick: reloadTick}
 	r.reader = NewTextReader(string(raw))
 	r.timestamp = time.Now()
 	return

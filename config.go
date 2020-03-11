@@ -78,9 +78,9 @@ func initConfig() {
 		text := strings.Join(lines, "\n")
 		hostsReaders = append(hostsReaders, Hosts.NewTextReader(text))
 	}
-	// 读取Hosts文件
+	// 读取Hosts文件。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range config.HostsFiles {
-		if reader, err := Hosts.NewFileReader(filename, time.Second*10); err != nil {
+		if reader, err := Hosts.NewFileReader(filename, 0); err != nil {
 			log.Printf("[WARNING] read hosts error: %v\n", err)
 		} else {
 			hostsReaders = append(hostsReaders, reader)
