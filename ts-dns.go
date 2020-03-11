@@ -80,8 +80,11 @@ func getGroupName(domain string) (group string, reason string) {
 	}
 
 	// 判断gfwlist
-	if group = config.GFWChecker.getGroupName(domain); group != "" {
-		return group, "GFWList"
+	if blocked, ok := config.GFWChecker.IsBlocked(domain); ok {
+		if blocked {
+			return "dirty", "GFWList"
+		}
+		return "clean", "GFWList"
 	}
 
 	// 从缓存中读取前次判断结果

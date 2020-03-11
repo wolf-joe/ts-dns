@@ -17,5 +17,5 @@
 src/
 pkg/
 bin/
-gfwlist.txt
+gfwlist*.txt
 dist/

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./GFWList"
 	"./Hosts"
 	"./IPSet"
 	"./TTLMap"
@@ -24,7 +25,7 @@ var hostsReaders []Hosts.Reader
 type tsDNSConfig struct {
 	Listen     string
 	GFWFile    string `toml:"gfwlist"`
-	GFWChecker *GFWList
+	GFWChecker *GFWList.DomainChecker
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
 	Redis      redisConfig
@@ -66,7 +67,7 @@ func initConfig() {
 	if config.GFWFile == "" {
 		config.GFWFile = "gfwlist.txt"
 	}
-	if config.GFWChecker, err = new(GFWList).Init(config.GFWFile); err != nil {
+	if config.GFWChecker, err = GFWList.NewCheckerByFn(config.GFWFile, true); err != nil {
 		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
 	}
 	// 读取Hosts
