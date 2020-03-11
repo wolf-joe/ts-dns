@@ -25,6 +25,7 @@
 1. 默认配置（`ts-dns.toml`），开箱即用
   ```toml
   listen = ":53"
+  gfwlist = "gfwlist.txt"
 
   [groups]
     [groups.clean]
@@ -42,21 +43,14 @@
   # 其余同默认配置
   ```
 
-3. 使用`GFWList`提高分组准确度
-  ```toml
-  listen = ":53"
-  gfwlist = "gfwlist.txt"
-  # 其余同默认配置
-  ```
-
-4. 自定义域名解析
+3. 自定义域名解析
   ```toml
   # 其余同默认配置
   [hosts]
   "www.example.com" = "1.1.1.1"
   ```
 
-5. 使用socks5代理解决DNS污染问题
+4. 使用socks5代理解决DNS污染问题
   ```toml
   # 其余同默认配置
     [groups.dirty]
@@ -64,7 +58,7 @@
     socks5 = "127.0.0.1:1080"
   ```
 
-6. 自定义域名分组
+5. 自定义域名分组
   ```toml
   # 其余同默认配置
     [groups.work]
@@ -72,7 +66,7 @@
     suffix = ["company.com"]
   ```
 
-7. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
+6. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
   ```toml
   # 其余同默认配置
     [groups.dirty]

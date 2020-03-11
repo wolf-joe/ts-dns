@@ -2,6 +2,7 @@
 # Make sure to check the documentation at http://goreleaser.com
 before:
   hooks:
+    - wget https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt -O gfwlist.txt
 builds:
   - env:
       - CGO_ENABLED=0
@@ -47,6 +48,7 @@ archives:
       - README*.md
       - LICENSE
       - ts-dns*.toml
+      - gfwlist.txt
 snapshot:
   name_template: "{{ .Tag }}"
 changelog:

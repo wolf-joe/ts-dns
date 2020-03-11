@@ -78,7 +78,7 @@ func getGroupName(domain string) (group string, reason string) {
 	}
 
 	// 判断gfwlist
-	if group = gfwList.getGroupName(domain); group != "" {
+	if group = config.GFWChecker.getGroupName(domain); group != "" {
 		return group, "GFWList"
 	}
 

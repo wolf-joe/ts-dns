@@ -18,17 +18,17 @@ import (
 var VERSION = "Unknown"
 
 var suffixMap = map[string]string{}
-var gfwList *GFWList
 var config tsDNSConfig
 var hostsReaders []Hosts.Reader
 
 type tsDNSConfig struct {
-	Listen      string
-	GFWListFile string   `toml:"gfwlist"`
-	HostsFiles  []string `toml:"hosts_files"`
-	Hosts       map[string]string
-	Redis       redisConfig
-	Groups      map[string]groupConfig
+	Listen     string
+	GFWFile    string `toml:"gfwlist"`
+	GFWChecker *GFWList
+	HostsFiles []string `toml:"hosts_files"`
+	Hosts      map[string]string
+	Redis      redisConfig
+	Groups     map[string]groupConfig
 }
 
 type redisConfig struct {
@@ -63,10 +63,11 @@ func initConfig() {
 	}
 	// 读取gfwlist
 	var err error
-	if config.GFWListFile != "" {
-		if gfwList, err = new(GFWList).Init(config.GFWListFile); err != nil {
-			log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
-		}
+	if config.GFWFile == "" {
+		config.GFWFile = "gfwlist.txt"
+	}
+	if config.GFWChecker, err = new(GFWList).Init(config.GFWFile); err != nil {
+		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
 	}
 	// 读取Hosts
 	var lines []string

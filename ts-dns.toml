@@ -2,6 +2,7 @@
 # https://github.com/wolf-joe/ts-dns
 
 listen = ":53"
+gfwlist = "gfwlist.txt"
 
 [groups]
   [groups.clean]

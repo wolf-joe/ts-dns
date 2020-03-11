@@ -3,7 +3,7 @@
 
 listen = ":53"
 # gfwlist文件路径，可下载https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
-# 推荐设置以提升使用体验
+# 强制开启gfwlist功能，且gfwlist.txt已在release包中包含
 gfwlist = "gfwlist.txt"
 # hosts文件路径，支持多hosts
 hosts_files = ["/etc/hosts"]

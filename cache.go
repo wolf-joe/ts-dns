@@ -51,7 +51,10 @@ func getGroupCache(domain string) (group string) {
 	default:
 		cacheHit, _ = groupCache.(*TTLMap.TTLMap).Get(domain)
 	}
-	return cacheHit.(string)
+	if cacheHit != nil {
+		return cacheHit.(string)
+	}
+	return ""
 }
 
 func setGroupCache(domain string, group string) (err error) {
