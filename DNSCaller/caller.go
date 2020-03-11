@@ -1,6 +1,7 @@
 package DNSCaller
 
 import (
+	"crypto/tls"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 	"net"
@@ -8,6 +9,7 @@ import (
 
 var udpClient = dns.Client{Net: "udp"}
 var tcpClient = dns.Client{Net: "tcp"}
+var tlsClient = dns.Client{Net: "tcp-tls"}
 
 type Caller interface {
 	Call(question dns.Question, extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error)
@@ -60,4 +62,14 @@ type TCPCaller struct {
 func (caller *TCPCaller) Call(question dns.Question,
 	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
 	return call(tcpClient, caller.address, question, extra, dialer)
+}
+
+type TLSCaller struct {
+	address   string
+	tlsConfig *tls.Config
+}
+
+func (caller *TLSCaller) Call(question dns.Question,
+	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
+	return call(tlsClient, caller.address, question, extra, dialer)
 }

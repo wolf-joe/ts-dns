@@ -1,7 +1,9 @@
 package DNSCaller
 
 import (
+	"crypto/tls"
 	"github.com/miekg/dns"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/proxy"
 	"os"
@@ -17,9 +19,9 @@ func assertFail(t *testing.T, val *dns.Msg, err error) {
 	assert.NotEqual(t, err, nil)
 	assert.True(t, val == nil)
 }
-func assertSuccess(t *testing.T, val interface{}, err error) {
+func assertSuccess(t *testing.T, val *dns.Msg, err error) {
 	assert.Equal(t, err, nil)
-	assert.True(t, val != nil)
+	assert.True(t, len(val.Answer) > 0)
 }
 
 func TestUDPCaller(t *testing.T) {
@@ -43,5 +45,18 @@ func TestTCPCaller(t *testing.T) {
 	address := "8.8.8.8:53"
 	caller := TCPCaller{address: address}
 	r, err := caller.Call(question, []dns.RR{}, nil)
+	assertSuccess(t, r, err)
+}
+
+func TestTLSCaller(t *testing.T) {
+	address := "1.0.0.1:853"
+	tlsConfig := &tls.Config{ServerName: "cloudflare-dns.com"}
+	caller := TLSCaller{address: address, tlsConfig: tlsConfig}
+	r, err := caller.Call(question, []dns.RR{}, nil)
+	assertSuccess(t, r, err)
+	r, err = caller.Call(question, []dns.RR{}, s5dialer)
+	if err != nil {
+		log.Println(err)
+	}
 	assertSuccess(t, r, err)
 }
