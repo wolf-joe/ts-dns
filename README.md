@@ -1,5 +1,5 @@
 # Telescope DNS
-* 支持按域名后缀匹配/GFWList匹配/半智能污染检测进行分组
+* 支持按域名后缀匹配/GFWList匹配测进行分组
 * 支持多hosts文件 + 手动指定hosts
 * DNS查询支持socks5代理
 * DNS记录缓存
