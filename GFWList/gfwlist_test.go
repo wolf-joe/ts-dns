@@ -21,9 +21,13 @@ func TestNewChecker(t *testing.T) {
 	blocked, ok := checker.IsBlocked("")
 	assert.Equal(t, blocked, false)
 	assert.Equal(t, ok, false)
-	blocked, ok = checker.IsBlocked("google.com") // blocked
-	assert.Equal(t, blocked, true)
+	// 规则.google.com不匹配google.com
+	blocked, ok = checker.IsBlocked("google.com")
+	assert.Equal(t, ok, false)
+	// 但匹配test.google.com
+	blocked, ok = checker.IsBlocked("test.google.com")
 	assert.Equal(t, ok, true)
+	assert.Equal(t, blocked, true)
 	blocked, ok = checker.IsBlocked("qq.com") // not blocked
 	assert.Equal(t, blocked, false)
 	assert.Equal(t, ok, true)

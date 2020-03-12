@@ -25,7 +25,11 @@ func (checker *DomainChecker) IsBlocked(domain string) (blocked bool, ok bool) {
 		if blocked, ok = checker.isBlocked[suffix]; ok {
 			return // GFWList内有对应记录
 		}
-		suffix = suffix[strings.Index(suffix, ".")+1:] // 移除最低级的域名再次匹配
+		if suffix[0] == '.' {
+			suffix = suffix[1:] // 移除域名前的点号再匹配
+		} else {
+			suffix = suffix[strings.Index(suffix, "."):] // 移除最低级的域名再匹配
+		}
 	}
 	// 通配符匹配
 	for _, regex := range checker.blockedRegs {
@@ -80,10 +84,6 @@ func NewCheckerByStr(text string, b64decode bool) (checker *DomainChecker, err e
 		idnReg := regexp.MustCompile(`^xn--[a-zA-Z0-9]{3,}$`)
 		if !tldReg.MatchString(tld) && !idnReg.MatchString(tld) {
 			continue // 无效
-		}
-		// 去掉域名前的"."号
-		if domain[0] == '.' {
-			domain = domain[1:]
 		}
 		// 域名末尾加上根域名"."
 		if domain[len(domain)-1] != '.' {
