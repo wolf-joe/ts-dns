@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./DNSCaller"
+	DNS "./DNSCaller"
 	"./GFWList"
 	"./Hosts"
 	"./IPSet"
@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/proxy"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -34,6 +35,8 @@ type groupStruct struct {
 	IPSetName string `toml:"ipset"`
 	IPSetTTL  int    `toml:"ipset_ttl"`
 	DNS       []string
+	DoT       []string
+	DoH       []string
 	Rules     []string
 }
 
@@ -94,17 +97,47 @@ func initConfig() (config *TSDNS.Config) {
 		if group.Socks5 != "" {
 			dialer, _ = proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
 		}
-		tsGroup := TSDNS.Group{}
 		// 为每个dns服务器创建Caller对象
-		for _, addr := range group.DNS {
+		var callers []DNS.Caller
+		for _, addr := range group.DNS { // TCP/UDP服务器
+			useTcp := false
+			if strings.HasSuffix(addr, "/tcp") {
+				addr, useTcp = addr[:len(addr)-4], true
+			}
 			if addr != "" {
 				if !strings.Contains(addr, ":") {
 					addr += ":53"
 				}
-				caller := &DNSCaller.UDPCaller{Address: addr, Dialer: dialer}
-				tsGroup.Callers = append(tsGroup.Callers, caller)
+				if useTcp {
+					callers = append(callers, &DNS.TCPCaller{Address: addr, Dialer: dialer})
+				} else {
+					callers = append(callers, &DNS.UDPCaller{Address: addr, Dialer: dialer})
+				}
 			}
 		}
+		for _, addr := range group.DoT { // dns over tls服务器，格式为ip:port@serverName
+			var serverName string
+			if arr := strings.Split(addr, "@"); len(arr) != 2 {
+				continue
+			} else {
+				addr, serverName = arr[0], arr[1]
+			}
+			if addr != "" {
+				if !strings.Contains(addr, ":") {
+					addr += ":853"
+				}
+				if serverName != "" {
+					callers = append(callers, DNS.NewTLSCaller(addr, dialer, serverName, false))
+				}
+			}
+		}
+		dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
+		for _, addr := range group.DoH { // dns over https服务器，格式为https://domain/dns-query
+			if dohReg.MatchString(addr) {
+				callers = append(callers, &DNS.DoHCaller{Url: addr, Dialer: dialer})
+			}
+		}
+		tsGroup := TSDNS.Group{Callers: callers}
 		// 读取匹配规则
 		tsGroup.Matcher = TSDNS.NewDomainMatcher(group.Rules)
 		// 读取IPSet名称和ttl

@@ -7,6 +7,7 @@ gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 [hosts] # 自定义域名映射
 "example.com" = "8.8.8.8"
+"cloudflare-dns.com" = "1.0.0.1"  # 防止下文提到的DoH递归解析
 
 [cache]  # dns缓存配置
 size = 4096  # 缓存大小，为负数时禁用缓存
@@ -15,12 +16,15 @@ max_ttl = 86400  # 最大ttl，单位为秒
 
 [groups] # 对域名进行分组
   [groups.clean]  # 必选分组，默认域名所在分组
-  dns = ["119.29.29.29", "223.5.5.5:53", "114.114.114.114"]  # DNS(UDP)服务器列表，默认使用53端口
+  dns = ["119.29.29.29/tcp", "223.5.5.5:53", "114.114.114.114"]  # DNS服务器列表，默认使用53端口
   rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
 
   [groups.dirty]  # 必选分组，匹配GFWList的域名会归类到该组
   socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析
   dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns，或自建dnscrypt-proxy
+  dot = ["1.0.0.1:853@cloudflare-dns.com"]  # dns over tls服务器
+  # 警告：如果本机的dns指向ts-dns自身，且DoH地址中的域名被归类到该组，则会出现递归解析的情况，此时需要在上面的hosts中指定对应IP
+  doh = ["https://cloudflare-dns.com/dns-query"]  # dns over https服务器
   rules = ["google.com"]  # 官方gfwlist里只有".google.com"规则，无法匹配"google.com"，所以手动加上
 
   # 警告：进程启动时会覆盖已有同名IPSet
