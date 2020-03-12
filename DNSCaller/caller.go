@@ -19,7 +19,6 @@ type Caller interface {
 }
 
 func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	msg := dns.Msg{Question: request.Question, Extra: request.Extra}
 	var proxyConn net.Conn
 	// 返回前关闭代理连接
 	defer func() {
@@ -29,7 +28,7 @@ func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dial
 	}()
 	if dialer == nil {
 		// 不使用代理
-		r, _, err = client.Exchange(&msg, address)
+		r, _, err = client.Exchange(request, address)
 		return r, err
 	}
 	// 使用代理连接DNS服务器
@@ -42,7 +41,7 @@ func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dial
 	} else { // dns over tls
 		conn = &dns.Conn{Conn: tls.Client(proxyConn, client.TLSConfig)}
 	}
-	if err = conn.WriteMsg(&msg); err != nil {
+	if err = conn.WriteMsg(request); err != nil {
 		return nil, err
 	}
 	return conn.ReadMsg()

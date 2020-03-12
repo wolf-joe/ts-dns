@@ -134,7 +134,6 @@ func initConfig() (config *TSDNS.Config) {
 		maxTTL = minTTL
 	}
 	config.Cache = TSDNS.NewDNSCache(cacheSize, minTTL, maxTTL)
-	log.Println(config.Cache)
 	// 检测配置有效性
 	if len(config.GroupMap) <= 0 || len(config.GroupMap["clean"].Callers) <= 0 || len(config.GroupMap["dirty"].Callers) <= 0 {
 		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")
