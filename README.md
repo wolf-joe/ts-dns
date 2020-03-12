@@ -1,5 +1,5 @@
 # Telescope DNS
-* 支持按域名后缀匹配/GFWList匹配测进行分组
+* 支持按规则匹配/GFWList匹配对域名进行分组
 * 支持多hosts文件 + 手动指定hosts
 * DNS查询支持socks5代理
 * DNS记录缓存
@@ -33,7 +33,7 @@
 
     [groups.dirty]
     dns = [""]  # 省略
-    suffix = ["google.com", "twimg.com", "quoracdn.net"]
+    rules = ["google.com"]
   ```
 
 2. 使用自定义hosts文件
@@ -63,7 +63,7 @@
   # 其余同默认配置
     [groups.work]
     dns = ["10.1.1.1"]
-    suffix = ["company.com"]
+    rules = ["company.com"]
   ```
 
 6. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
@@ -71,7 +71,7 @@
   # 其余同默认配置
     [groups.dirty]
     dns = [""]  # 省略
-    suffix = ["google.com", "twimg.com", "quoracdn.net"]
+    rules = ["google.com"]
     ipset = "blocked"
     ipset_ttl = 86400
   ```

@@ -1,40 +1,34 @@
 # Telescope DNS Configure File
 # https://github.com/wolf-joe/ts-dns
 
-listen = ":53"
-# gfwlist文件路径，可下载https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
-# 强制开启gfwlist功能，且gfwlist.txt已在release包中包含
-gfwlist = "gfwlist.txt"
-# hosts文件路径，支持多hosts
-hosts_files = ["/etc/hosts"]
+listen = ":53"  # 监听端口
+gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官方地址：https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
 
-# 自定义域名映射
-[hosts]
+hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
+[hosts] # 自定义域名映射
 "example.com" = "8.8.8.8"
 
-# 域名分组
-[groups]
-  [groups.clean]
-  # 推荐用国内dns解析
-  dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
+[cache]  # dns缓存配置
+size = 4096  # 缓存大小，为负数时禁用缓存
+min_ttl = 60  # 最小ttl，单位为秒
+max_ttl = 86400  # 最大ttl，单位为秒
 
-  [groups.dirty]
-  # 当使用国外53端口dns解析时推荐用socks5代理解析
-  socks5 = "127.0.0.1:1080"
-  # 如不想用socks5代理解析时推荐使用国外非53端口dns，或自建dnscrypt-proxy
-  dns = ["8.8.8.8", "1.1.1.1"]
-  # 域名后缀列表，符合以下后缀的域名强制归类为dirty组
-  # 现有域名污染检测机制不够完善，不能正常检测以下域名是否被污染，当不使用gfwlist时需要维护该列表
-  suffix = ["google.com", "twimg.com", "quoracdn.net"]
+[groups] # 对域名进行分组
+  [groups.clean]  # 必选分组，默认域名所在分组
+  dns = ["119.29.29.29", "223.5.5.5:53", "114.114.114.114"]  # DNS(UDP)服务器列表，默认使用53端口
+  rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
 
-  # 目标ipset名称，该下所有域名的ipv4解析结果将加入到该ipset中
-  # 警告：进程启动时会覆盖同名IPSet
-  ipset = "blocked"
-  # ipset记录超时时间，单位为秒，推荐设置以避免ipset记录过多
-  ipset_ttl = 86400
+  [groups.dirty]  # 必选分组，匹配GFWList的域名会归类到该组
+  socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析
+  dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns，或自建dnscrypt-proxy
+  rules = ["google.com"]  # 官方gfwlist里只有".google.com"规则，无法匹配"google.com"，所以手动加上
 
-  # 以下为自定义域名组，用于其它情况
+  # 警告：进程启动时会覆盖已有同名IPSet
+  ipset = "blocked"  # 目标IPSet名称，该组所有域名的ipv4解析结果将加入到该IPSet中
+  ipset_ttl = 86400 # ipset记录超时时间，单位为秒，推荐设置以避免ipset记录过多
+
+  # 以下为自定义分组，用于其它情况
   # 比如办公网内，内外域名（company.com）用内网dns（10.1.1.1）解析
   [groups.work]
   dns = ["10.1.1.1"]
-  suffix = ["company.com"]
+  rules = ["company.com"]

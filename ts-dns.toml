@@ -10,4 +10,4 @@ gfwlist = "gfwlist.txt"
 
   [groups.dirty]
   dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
-  suffix = ["google.com", "twimg.com", "quoracdn.net"]
+  rule = ["google.com"]
