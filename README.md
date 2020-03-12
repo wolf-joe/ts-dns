@@ -1,8 +1,9 @@
 # Telescope DNS
 * 支持按规则匹配/GFWList匹配对域名进行分组
 * 支持多hosts文件 + 手动指定hosts
-* DNS查询支持socks5代理
-* DNS记录缓存
+* 支持DNS over UDP/TCP/TLS/HTTPS（详见`ts-dns.full.toml`）
+* DNS查询支持使用socks5代理
+* DNS记录缓存（包括EDNS Client Subnet）
 * 自动添加IPSet记录
 
 > 整体结构：
