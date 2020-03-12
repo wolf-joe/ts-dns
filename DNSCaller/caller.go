@@ -1,25 +1,25 @@
 package DNSCaller
 
 import (
+	"bytes"
 	"crypto/tls"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
+	"io/ioutil"
 	"net"
+	"net/http"
 )
 
 var udpClient = dns.Client{Net: "udp"}
 var tcpClient = dns.Client{Net: "tcp"}
+var httpClient = http.Client{}
 
 type Caller interface {
-	Call(question dns.Question, extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error)
+	Call(request *dns.Msg) (r *dns.Msg, err error)
 }
 
-func call(client dns.Client, address string, question dns.Question,
-	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	msg := dns.Msg{}
-	msg.Extra = extra
-	msg.SetQuestion(question.Name, question.Qtype)
-
+func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dialer) (r *dns.Msg, err error) {
+	msg := dns.Msg{Question: request.Question, Extra: request.Extra}
 	var proxyConn net.Conn
 	// 返回前关闭代理连接
 	defer func() {
@@ -51,29 +51,71 @@ func call(client dns.Client, address string, question dns.Question,
 
 type UDPCaller struct {
 	address string
+	dialer  proxy.Dialer
 }
 
-func (caller *UDPCaller) Call(question dns.Question,
-	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	return call(udpClient, caller.address, question, extra, dialer)
+func (caller *UDPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	return call(udpClient, request, caller.address, caller.dialer)
 }
 
 type TCPCaller struct {
 	address string
+	dialer  proxy.Dialer
 }
 
-func (caller *TCPCaller) Call(question dns.Question,
-	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	return call(tcpClient, caller.address, question, extra, dialer)
+func (caller *TCPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	return call(tcpClient, request, caller.address, caller.dialer)
 }
 
 type TLSCaller struct {
-	address   string
-	tlsConfig *tls.Config
+	address string
+	dialer  proxy.Dialer
+	client  dns.Client
 }
 
-func (caller *TLSCaller) Call(question dns.Question,
-	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	client := dns.Client{Net: "tcp-tls", TLSConfig: caller.tlsConfig}
-	return call(client, caller.address, question, extra, dialer)
+func (caller *TLSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	return call(caller.client, request, caller.address, caller.dialer)
+}
+
+func NewTLSCaller(address string, dialer proxy.Dialer,
+	serverName string, skipVerify bool) *TLSCaller {
+	client := dns.Client{Net: "tcp-tls", TLSConfig: &tls.Config{
+		ServerName: serverName, InsecureSkipVerify: skipVerify,
+	}}
+	caller := &TLSCaller{address: address, dialer: dialer, client: client}
+	return caller
+}
+
+type DoHCaller struct {
+	url    string
+	dialer proxy.Dialer
+}
+
+func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	// 打包请求
+	var buf []byte
+	if buf, err = request.Pack(); err != nil {
+		return nil, err
+	}
+	if caller.dialer != nil { // 使用代理
+		httpClient.Transport = &http.Transport{Dial: caller.dialer.Dial}
+	}
+	// 发送请求
+	var resp *http.Response
+	contentType, payload := "application/dns-message", bytes.NewBuffer(buf)
+	if resp, err = httpClient.Post(caller.url, contentType, payload); err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// 读取响应
+	var body []byte
+	if body, err = ioutil.ReadAll(resp.Body); err != nil {
+		return nil, err
+	}
+	// 解包响应
+	msg := new(dns.Msg)
+	if err = msg.Unpack(body); err != nil {
+		return nil, err
+	}
+	return msg, nil
 }

@@ -1,7 +1,6 @@
 package DNSCaller
 
 import (
-	"crypto/tls"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/proxy"
@@ -24,35 +23,67 @@ func assertSuccess(t *testing.T, val *dns.Msg, err error) {
 }
 
 func TestUDPCaller(t *testing.T) {
-	address := "8.8.8.8:53"
+	request, fakeRequest := &dns.Msg{}, &dns.Msg{}
+	request.SetQuestion(question.Name, question.Qtype)
+	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
+	address := "1.1.1.1:53"
 	caller := UDPCaller{address: address + "ne"}
-	r, err := caller.Call(question, []dns.RR{}, nil)
+	r, err := caller.Call(request)
 	assertFail(t, r, err)
 
-	caller = UDPCaller{address: address}
-	r, err = caller.Call(question, []dns.RR{}, nil)
+	caller = UDPCaller{address: address, dialer: s5dialer}
+	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
-	r, err = caller.Call(question, []dns.RR{}, s5dialer)
-	assertSuccess(t, r, err)
-	r, err = caller.Call(fakeQuest, []dns.RR{}, s5dialer)
+	r, err = caller.Call(fakeRequest)
 	assertFail(t, r, err)
-	r, err = caller.Call(question, []dns.RR{}, fakeDialer)
+	caller = UDPCaller{address: address, dialer: fakeDialer}
+	r, err = caller.Call(request)
 	assertFail(t, r, err)
 }
 
 func TestTCPCaller(t *testing.T) {
-	address := "8.8.8.8:53"
+	request, fakeRequest := &dns.Msg{}, &dns.Msg{}
+	request.SetQuestion(question.Name, question.Qtype)
+	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
+	address := "1.1.1.1:53"
 	caller := TCPCaller{address: address}
-	r, err := caller.Call(question, []dns.RR{}, nil)
+	r, err := caller.Call(request)
+	assertSuccess(t, r, err)
+	caller = TCPCaller{address: address, dialer: s5dialer}
+	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 }
 
 func TestTLSCaller(t *testing.T) {
-	address := "1.0.0.1:853"
-	tlsConfig := &tls.Config{ServerName: "cloudflare-dns.com"}
-	caller := TLSCaller{address: address, tlsConfig: tlsConfig}
-	r, err := caller.Call(question, []dns.RR{}, nil)
+	request, fakeRequest := &dns.Msg{}, &dns.Msg{}
+	request.SetQuestion(question.Name, question.Qtype)
+	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
+	address, serverName := "1.0.0.1:853", "cloudflare-dns.com"
+	caller := NewTLSCaller(address, nil, serverName, false)
+	r, err := caller.Call(request)
 	assertSuccess(t, r, err)
-	r, err = caller.Call(question, []dns.RR{}, s5dialer)
+	caller = NewTLSCaller(address, s5dialer, serverName, false)
+	r, err = caller.Call(request)
+	assertSuccess(t, r, err)
+}
+
+func TestDoHCaller(t *testing.T) {
+	request, fakeRequest := &dns.Msg{}, &dns.Msg{}
+	request.SetQuestion(question.Name, question.Qtype)
+	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
+	url := "https://cloudflare-dns.com/dns-query"
+	caller := DoHCaller{url: "https://not-exists.com/dns-query"}
+	r, err := caller.Call(request)
+	assertFail(t, r, err)
+	caller = DoHCaller{url: url + "/ne"}
+	r, err = caller.Call(request)
+	assertFail(t, r, err)
+	caller = DoHCaller{url: url}
+	r, err = caller.Call(request)
+	assertSuccess(t, r, err)
+	r, err = caller.Call(fakeRequest)
+	assertFail(t, r, err)
+	caller = DoHCaller{url: url, dialer: s5dialer}
+	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 }
