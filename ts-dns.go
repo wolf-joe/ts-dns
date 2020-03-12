@@ -1,53 +1,19 @@
 package main
 
 import (
+	"./TSDNS"
 	"fmt"
 	"github.com/miekg/dns"
-	"golang.org/x/net/proxy"
 	"log"
-	"net"
-	"strings"
 )
 
-var dnsClient = new(dns.Client)
-
-func queryDns(question dns.Question, server string,
-	extra []dns.RR, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	msg := dns.Msg{}
-	msg.Extra = extra
-	msg.SetQuestion(question.Name, question.Qtype)
-
-	var proxyConn net.Conn
-	// 返回前缓存查询结果并关闭代理连接
-	defer func() {
-		setDNSCache(question, extra, r)
-		if proxyConn != nil {
-			_ = proxyConn.Close()
-		}
-	}()
-	if dialer != nil {
-		// 使用代理连接DNS服务器
-		if proxyConn, err = dialer.Dial("tcp", server); err != nil {
-			return nil, err
-		} else {
-			conn := &dns.Conn{Conn: proxyConn}
-			if err = conn.WriteMsg(&msg); err != nil {
-				return nil, err
-			}
-			return conn.ReadMsg()
-		}
-	} else {
-		// 不使用代理
-		r, _, err = dnsClient.Exchange(&msg, server)
-		return r, err
-	}
-}
+var config *TSDNS.Config
 
 func getGroupName(domain string) (group string, reason string) {
 	// 优先检测预设规则
-	for suffix, group := range suffixMap {
-		if strings.HasSuffix(domain, suffix) {
-			return group, "suffix " + suffix
+	for name, group := range config.GroupMap {
+		if match, ok := group.Matcher.IsMatch(domain); ok && match {
+			return name, "rule"
 		}
 	}
 
@@ -74,13 +40,10 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}()
 
 	question := request.Question[0]
-	if strings.Count(question.Name, ".ne-") > 1 {
-		log.Fatalln("[CRITICAL] recursive query") // 防止递归
-	}
 	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
-		for _, reader := range hostsReaders {
+		for _, reader := range config.HostsReaders {
 			// hostname为domain去掉末尾"."符号后的值
 			record, hostname := "", question.Name[:len(question.Name)-1]
 			if record = reader.GenRecord(hostname, question.Qtype); record == "" {
@@ -89,7 +52,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			}
 			if record != "" {
 				if ret, err := dns.NewRR(record); err != nil {
-					log.Printf("[ERROR] make dns.RR error: %v\n", err)
+					log.Printf("[ERROR] make DNS.RR error: %v\n", err)
 				} else {
 					r = new(dns.Msg)
 					r.Answer = append(r.Answer, ret)
@@ -101,19 +64,20 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 检测dns缓存是否命中
-	if r = getDNSCache(question, request.Extra); r != nil {
+	if r = getDNSCache(request); r != nil {
 		log.Println(msg + "hit cache")
 		return
 	}
 
 	var err error
-	groupName, reason := getGroupName(question.Name)
-	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", groupName, reason))
-	if group, ok := config.Groups[groupName]; ok {
-		for _, server := range group.DNS { // 遍历DNS服务器
-			r, err = queryDns(question, server, request.Extra, group.Dialer) // 发送查询请求
+	name, reason := getGroupName(question.Name)
+	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", name, reason))
+	if group, ok := config.GroupMap[name]; ok {
+		for _, caller := range group.Callers { // 遍历DNS服务器
+			r, err = caller.Call(request) // 发送查询请求
+			setDNSCache(request, r)
 			if err != nil {
-				log.Printf("[ERROR] query dns error: %v\n", err)
+				log.Printf("[ERROR] query DNS error: %v\n", err)
 			}
 			if r != nil {
 				break
@@ -135,10 +99,10 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 }
 
 func main() {
-	initConfig()
+	config = initConfig()
 	srv := &dns.Server{Addr: config.Listen, Net: "udp"}
 	srv.Handler = &handler{}
-	log.Printf("[WARNING] listen on %s/udp\n", config.Listen)
+	log.Printf("[WARNING] Listen on %s/udp\n", config.Listen)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("[CRITICAL] liten udp error: %v\n", err)
 	}

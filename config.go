@@ -1,9 +1,11 @@
 package main
 
 import (
+	"./DNSCaller"
 	"./GFWList"
 	"./Hosts"
 	"./IPSet"
+	"./TSDNS"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -15,106 +17,103 @@ import (
 
 var VERSION = "Unknown"
 
-var suffixMap = map[string]string{}
-var config tsDNSConfig
-var hostsReaders []Hosts.Reader
+var tomlConfig tomlStruct
 
-type tsDNSConfig struct {
+type tomlStruct struct {
 	Listen     string
-	GFWFile    string `toml:"gfwlist"`
-	GFWChecker *GFWList.DomainChecker
+	GFWFile    string   `toml:"gfwlist"`
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
-	Redis      redisConfig
-	Groups     map[string]groupConfig
+	GroupMap   map[string]groupStruct `toml:"groups"`
 }
 
-type redisConfig struct {
-	Host     string
-	Password string
-	DB       int
-}
-
-type groupConfig struct {
+type groupStruct struct {
 	Socks5    string
-	Dialer    proxy.Dialer
 	IPSetName string `toml:"ipset"`
 	IPSetTTL  int    `toml:"ipset_ttl"`
-	IPSet     *ipset.IPSet
 	DNS       []string
-	Suffix    []string
+	Rules     []string
 }
 
-func initConfig() {
-	// 读取配置文件
+func initConfig() (config *TSDNS.Config) {
+	// 读取命令行参数
 	var cfgPath string
 	var version bool
 	flag.StringVar(&cfgPath, "c", "ts-dns.toml", "config file path")
 	flag.BoolVar(&version, "v", false, "show version and exit")
 	flag.Parse()
-	if version {
+	if version { // 显示版本号
 		fmt.Println(VERSION)
 		os.Exit(0)
 	}
-	if _, err := toml.DecodeFile(cfgPath, &config); err != nil {
-		log.Fatalf("[CRITICAL] read config error: %v\n", err)
+	// 读取配置文件
+	if _, err := toml.DecodeFile(cfgPath, &tomlConfig); err != nil {
+		log.Fatalf("[CRITICAL] read tomlConfig error: %v\n", err)
+	}
+	config = &TSDNS.Config{Listen: tomlConfig.Listen, GroupMap: map[string]TSDNS.Group{}}
+	if config.Listen == "" {
+		config.Listen = ":53"
 	}
 	// 读取gfwlist
 	var err error
-	if config.GFWFile == "" {
-		config.GFWFile = "gfwlist.txt"
+	if tomlConfig.GFWFile == "" {
+		tomlConfig.GFWFile = "gfwlist.txt"
 	}
-	if config.GFWChecker, err = GFWList.NewCheckerByFn(config.GFWFile, true); err != nil {
-		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
+	if config.GFWChecker, err = GFWList.NewCheckerByFn(tomlConfig.GFWFile, true); err != nil {
+		log.Fatalf("[CRITICAL] read GFWFile error: %v\n", err)
 	}
-	// 读取Hosts
+	// 读取Hosts列表
 	var lines []string
-	for hostname, ip := range config.Hosts {
+	for hostname, ip := range tomlConfig.Hosts {
 		lines = append(lines, ip+" "+hostname)
 	}
 	if len(lines) > 0 {
 		text := strings.Join(lines, "\n")
-		hostsReaders = append(hostsReaders, Hosts.NewTextReader(text))
+		config.HostsReaders = append(config.HostsReaders, Hosts.NewTextReader(text))
 	}
-	// 读取Hosts文件。reloadTick为0代表不自动重载hosts文件
-	for _, filename := range config.HostsFiles {
+	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
+	for _, filename := range tomlConfig.HostsFiles {
 		if reader, err := Hosts.NewFileReader(filename, 0); err != nil {
-			log.Printf("[WARNING] read hosts error: %v\n", err)
+			log.Printf("[WARNING] read Hosts error: %v\n", err)
 		} else {
-			hostsReaders = append(hostsReaders, reader)
+			config.HostsReaders = append(config.HostsReaders, reader)
 		}
 	}
-	// 读取每个组的suffix、socks5、ipset，并为DNS地址加上默认端口
-	for groupName, group := range config.Groups {
-		for _, suffix := range group.Suffix {
-			if suffix != "" && suffix[len(suffix)-1] != '.' {
-				suffixMap[suffix+"."] = groupName
-			} else if suffix != "" {
-				suffixMap[suffix] = groupName
-			}
-		}
+	// 读取每个域名组的配置信息
+	for name, group := range tomlConfig.GroupMap {
+		// 读取socks5代理地址
+		var dialer proxy.Dialer
 		if group.Socks5 != "" {
-			group.Dialer, _ = proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
-			config.Groups[groupName] = group
+			dialer, _ = proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
 		}
-		for i, addr := range group.DNS {
-			if addr != "" && !strings.Contains(addr, ":") {
-				group.DNS[i] = addr + ":53"
+		tsGroup := TSDNS.Group{}
+		// 为每个dns服务器创建Caller对象
+		for _, addr := range group.DNS {
+			if addr != "" {
+				if !strings.Contains(addr, ":") {
+					addr += ":53"
+				}
+				caller := &DNSCaller.UDPCaller{Address: addr, Dialer: dialer}
+				tsGroup.Callers = append(tsGroup.Callers, caller)
 			}
 		}
+		// 读取匹配规则
+		tsGroup.Matcher = TSDNS.NewDomainMatcher(group.Rules)
+		// 读取IPSet名称和ttl
 		if group.IPSetName != "" {
-			if group.IPSetTTL < 0 {
-				group.IPSetTTL = 0
+			if group.IPSetTTL > 0 {
+				tsGroup.IPSetTTL = group.IPSetTTL
 			}
-			group.IPSet, err = ipset.New(group.IPSetName, "hash:ip", &ipset.Params{})
+			tsGroup.IPSet, err = ipset.New(group.IPSetName, "hash:ip", &ipset.Params{})
 			if err != nil {
 				log.Fatalf("[CRITICAL] create ipset error: %v\n", err)
 			}
-			config.Groups[groupName] = group
 		}
+		config.GroupMap[name] = tsGroup
 	}
 	// 检测配置有效性
-	if len(config.Groups) <= 0 || len(config.Groups["clean"].DNS) <= 0 || len(config.Groups["dirty"].DNS) <= 0 {
+	if len(config.GroupMap) <= 0 || len(config.GroupMap["clean"].Callers) <= 0 || len(config.GroupMap["dirty"].Callers) <= 0 {
 		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")
 	}
+	return
 }

@@ -33,7 +33,8 @@ func getSubnet(extra []dns.RR) string {
 	return ""
 }
 
-func getDNSCache(question dns.Question, extra []dns.RR) *dns.Msg {
+func getDNSCache(request *dns.Msg) *dns.Msg {
+	question, extra := request.Question[0], request.Extra
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
 	if subnet := getSubnet(extra); subnet != "" {
 		cacheKey += "." + subnet
@@ -44,7 +45,8 @@ func getDNSCache(question dns.Question, extra []dns.RR) *dns.Msg {
 	return nil
 }
 
-func setDNSCache(question dns.Question, extra []dns.RR, r *dns.Msg) {
+func setDNSCache(request *dns.Msg, r *dns.Msg) {
+	question, extra := request.Question[0], request.Extra
 	if dnsCache.Len() >= CacheSize || r == nil || len(r.Answer) <= 0 {
 		return
 	}

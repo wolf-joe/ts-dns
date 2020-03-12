@@ -27,16 +27,16 @@ func TestUDPCaller(t *testing.T) {
 	request.SetQuestion(question.Name, question.Qtype)
 	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
 	address := "1.1.1.1:53"
-	caller := UDPCaller{address: address + "ne"}
+	caller := UDPCaller{Address: address + "ne"}
 	r, err := caller.Call(request)
 	assertFail(t, r, err)
 
-	caller = UDPCaller{address: address, dialer: s5dialer}
+	caller = UDPCaller{Address: address, Dialer: s5dialer}
 	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 	r, err = caller.Call(fakeRequest)
 	assertFail(t, r, err)
-	caller = UDPCaller{address: address, dialer: fakeDialer}
+	caller = UDPCaller{Address: address, Dialer: fakeDialer}
 	r, err = caller.Call(request)
 	assertFail(t, r, err)
 }
@@ -46,10 +46,10 @@ func TestTCPCaller(t *testing.T) {
 	request.SetQuestion(question.Name, question.Qtype)
 	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
 	address := "1.1.1.1:53"
-	caller := TCPCaller{address: address}
+	caller := TCPCaller{Address: address}
 	r, err := caller.Call(request)
 	assertSuccess(t, r, err)
-	caller = TCPCaller{address: address, dialer: s5dialer}
+	caller = TCPCaller{Address: address, Dialer: s5dialer}
 	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 }
@@ -72,18 +72,18 @@ func TestDoHCaller(t *testing.T) {
 	request.SetQuestion(question.Name, question.Qtype)
 	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
 	url := "https://cloudflare-dns.com/dns-query"
-	caller := DoHCaller{url: "https://not-exists.com/dns-query"}
+	caller := DoHCaller{Url: "https://not-exists.com/dns-query"}
 	r, err := caller.Call(request)
 	assertFail(t, r, err)
-	caller = DoHCaller{url: url + "/ne"}
+	caller = DoHCaller{Url: url + "/ne"}
 	r, err = caller.Call(request)
 	assertFail(t, r, err)
-	caller = DoHCaller{url: url}
+	caller = DoHCaller{Url: url}
 	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 	r, err = caller.Call(fakeRequest)
 	assertFail(t, r, err)
-	caller = DoHCaller{url: url, dialer: s5dialer}
+	caller = DoHCaller{Url: url, Dialer: s5dialer}
 	r, err = caller.Call(request)
 	assertSuccess(t, r, err)
 }

@@ -50,21 +50,21 @@ func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dial
 }
 
 type UDPCaller struct {
-	address string
-	dialer  proxy.Dialer
+	Address string
+	Dialer  proxy.Dialer
 }
 
 func (caller *UDPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	return call(udpClient, request, caller.address, caller.dialer)
+	return call(udpClient, request, caller.Address, caller.Dialer)
 }
 
 type TCPCaller struct {
-	address string
-	dialer  proxy.Dialer
+	Address string
+	Dialer  proxy.Dialer
 }
 
 func (caller *TCPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	return call(tcpClient, request, caller.address, caller.dialer)
+	return call(tcpClient, request, caller.Address, caller.Dialer)
 }
 
 type TLSCaller struct {
@@ -87,8 +87,8 @@ func NewTLSCaller(address string, dialer proxy.Dialer,
 }
 
 type DoHCaller struct {
-	url    string
-	dialer proxy.Dialer
+	Url    string
+	Dialer proxy.Dialer
 }
 
 func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
@@ -97,13 +97,13 @@ func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	if buf, err = request.Pack(); err != nil {
 		return nil, err
 	}
-	if caller.dialer != nil { // 使用代理
-		httpClient.Transport = &http.Transport{Dial: caller.dialer.Dial}
+	if caller.Dialer != nil { // 使用代理
+		httpClient.Transport = &http.Transport{Dial: caller.Dialer.Dial}
 	}
 	// 发送请求
 	var resp *http.Response
 	contentType, payload := "application/dns-message", bytes.NewBuffer(buf)
-	if resp, err = httpClient.Post(caller.url, contentType, payload); err != nil {
+	if resp, err = httpClient.Post(caller.Url, contentType, payload); err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
