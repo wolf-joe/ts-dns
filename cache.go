@@ -3,7 +3,6 @@ package main
 import (
 	"./TTLMap"
 	"fmt"
-	"github.com/go-redis/redis"
 	"github.com/miekg/dns"
 	"strconv"
 	"time"
@@ -16,7 +15,6 @@ const (
 )
 
 var dnsCache = TTLMap.NewMap(time.Minute)
-var groupCache interface{}
 
 // 获取dns请求或响应extra中的subnet字符串，格式为"Address/SourceNetmask"
 func getSubnet(extra []dns.RR) string {
@@ -64,32 +62,4 @@ func setDNSCache(question dns.Question, extra []dns.RR, r *dns.Msg) {
 		ex = CacheMinTTL
 	}
 	dnsCache.Set(cacheKey, r, time.Duration(ex)*time.Second)
-}
-
-func getGroupCache(domain string) (group string) {
-	var cacheHit interface{}
-	switch groupCache.(type) {
-	case *redis.Client:
-		// get redis key时忽略错误，因为作者无法区分"key不存在"和其它错误
-		cacheHit, _ = groupCache.(*redis.Client).Get(domain).Result()
-	default:
-		cacheHit, _ = groupCache.(*TTLMap.TTLMap).Get(domain)
-	}
-	if cacheHit != nil {
-		return cacheHit.(string)
-	}
-	return ""
-}
-
-func setGroupCache(domain string, group string) (err error) {
-	ex := time.Hour * 24
-	switch groupCache.(type) {
-	case *redis.Client:
-		return groupCache.(*redis.Client).Set(domain, group, ex).Err()
-	default:
-		if groupCache.(*TTLMap.TTLMap).Len() < CacheSize {
-			groupCache.(*TTLMap.TTLMap).Set(domain, group, ex)
-		}
-		return nil
-	}
 }

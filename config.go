@@ -4,16 +4,13 @@ import (
 	"./GFWList"
 	"./Hosts"
 	"./IPSet"
-	"./TTLMap"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/go-redis/redis"
 	"golang.org/x/net/proxy"
 	"log"
 	"os"
 	"strings"
-	"time"
 )
 
 var VERSION = "Unknown"
@@ -115,17 +112,6 @@ func initConfig() {
 			}
 			config.Groups[groupName] = group
 		}
-	}
-	// 读取redis
-	if rds := config.Redis; rds.Host != "" {
-		groupCache = redis.NewClient(&redis.Options{Addr: rds.Host, Password: rds.Password, DB: rds.DB})
-		if _, err := groupCache.(*redis.Client).Ping().Result(); err != nil {
-			log.Fatalf("[CRITICAL] connect redis error: %v\n", err)
-		} else {
-			log.Printf("[WARNING] connect redis://%s/%d success\n", rds.Host, rds.DB)
-		}
-	} else {
-		groupCache = TTLMap.NewMap(time.Minute)
 	}
 	// 检测配置有效性
 	if len(config.Groups) <= 0 || len(config.Groups["clean"].DNS) <= 0 || len(config.Groups["dirty"].DNS) <= 0 {

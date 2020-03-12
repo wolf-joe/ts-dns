@@ -6,9 +6,7 @@ import (
 	"golang.org/x/net/proxy"
 	"log"
 	"net"
-	"strconv"
 	"strings"
-	"time"
 )
 
 var dnsClient = new(dns.Client)
@@ -45,33 +43,7 @@ func queryDns(question dns.Question, server string,
 	}
 }
 
-func isPolluted(domain string) (polluted bool, err error) {
-	// 向clean组dns服务器（推荐设置为公共DNS）发送请求来判定域名是否被污染
-	domain = "ne-" + strconv.FormatInt(time.Now().UnixNano(), 16) + "." + domain
-	log.Println("[DEBUG] check pollute: " + domain)
-	var r *dns.Msg
-	for _, server := range config.Groups["clean"].DNS {
-		question := dns.Question{Name: domain, Qtype: dns.TypeA}
-		r, err = queryDns(question, server, []dns.RR{}, config.Groups["clean"].Dialer)
-		if err != nil {
-			log.Printf("[ERROR] query dns error: %v\n", err)
-		}
-		if r != nil {
-			break
-		}
-	}
-	// 对于很可能不存在的域名，如果直接返回一条A记录则判定为域名已被污染
-	if r != nil && len(r.Answer) == 1 {
-		switch r.Answer[0].(type) {
-		case *dns.A:
-			return true, nil
-		}
-	}
-	return false, err
-}
-
 func getGroupName(domain string) (group string, reason string) {
-	// 判断目标域名所在的分组
 	// 优先检测预设规则
 	for suffix, group := range suffixMap {
 		if strings.HasSuffix(domain, suffix) {
@@ -86,31 +58,7 @@ func getGroupName(domain string) (group string, reason string) {
 		}
 		return "clean", "GFWList"
 	}
-
-	// 从缓存中读取前次判断结果
-	group = getGroupCache(domain)
-	if _, ok := config.Groups[group]; ok {
-		return group, "pollute cache" // 如果缓存内的groupName有效则直接返回
-	}
-
-	// 判断域名是否受到污染，并按污染结果将域名分组
-	var setErr error
-	defer func() {
-		if setErr != nil {
-			log.Printf("[ERROR] set group cache error: %s\n", setErr)
-		}
-	}()
-	if polluted, err := isPolluted(domain); err != nil {
-		log.Printf("[ERROR] check polluted error: %v\n", err)
-		return "clean", "pollute detect err"
-	} else if polluted {
-		log.Printf("[WARNING] %s polluted\n", domain)
-		setErr = setGroupCache(domain, "dirty")
-		return "dirty", "pollute detect"
-	} else {
-		setErr = setGroupCache(domain, "clean")
-		return "clean", "pollute detect"
-	}
+	return "clean", "default"
 }
 
 type handler struct{}
