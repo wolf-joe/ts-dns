@@ -82,7 +82,6 @@
 
 * DNS响应择优
 * DNS缓存预取
-* DNS over HTTPS/TLS/TCP等支持
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
