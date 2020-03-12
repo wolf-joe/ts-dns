@@ -64,7 +64,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 检测dns缓存是否命中
-	if r = getDNSCache(request); r != nil {
+	if r = config.Cache.Get(request); r != nil {
 		log.Println(msg + "hit cache")
 		return
 	}
@@ -75,7 +75,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	if group, ok := config.GroupMap[name]; ok {
 		for _, caller := range group.Callers { // 遍历DNS服务器
 			r, err = caller.Call(request) // 发送查询请求
-			setDNSCache(request, r)
+			config.Cache.Set(request, r)
 			if err != nil {
 				log.Printf("[ERROR] query DNS error: %v\n", err)
 			}

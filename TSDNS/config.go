@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Cache        *DNSCache
 	Listen       string
 	GFWChecker   *GFWList.DomainChecker
 	HostsReaders []Hosts.Reader

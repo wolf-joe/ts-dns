@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 var VERSION = "Unknown"
@@ -24,6 +25,7 @@ type tomlStruct struct {
 	GFWFile    string   `toml:"gfwlist"`
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
+	Cache      cacheStruct
 	GroupMap   map[string]groupStruct `toml:"groups"`
 }
 
@@ -33,6 +35,12 @@ type groupStruct struct {
 	IPSetTTL  int    `toml:"ipset_ttl"`
 	DNS       []string
 	Rules     []string
+}
+
+type cacheStruct struct {
+	Size   int
+	MinTTL int `toml:"min_ttl"`
+	MaxTTL int `toml:"max_ttl"`
 }
 
 func initConfig() (config *TSDNS.Config) {
@@ -111,6 +119,22 @@ func initConfig() (config *TSDNS.Config) {
 		}
 		config.GroupMap[name] = tsGroup
 	}
+	// 读取cache配置
+	cacheSize, minTTL, maxTTL := 4096, time.Minute, 24*time.Hour
+	if tomlConfig.Cache.Size != 0 {
+		cacheSize = tomlConfig.Cache.Size
+	}
+	if tomlConfig.Cache.MinTTL != 0 {
+		minTTL = time.Second * time.Duration(tomlConfig.Cache.MinTTL)
+	}
+	if tomlConfig.Cache.MaxTTL != 0 {
+		maxTTL = time.Second * time.Duration(tomlConfig.Cache.MaxTTL)
+	}
+	if maxTTL < minTTL {
+		maxTTL = minTTL
+	}
+	config.Cache = TSDNS.NewDNSCache(cacheSize, minTTL, maxTTL)
+	log.Println(config.Cache)
 	// 检测配置有效性
 	if len(config.GroupMap) <= 0 || len(config.GroupMap["clean"].Callers) <= 0 || len(config.GroupMap["dirty"].Callers) <= 0 {
 		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")
