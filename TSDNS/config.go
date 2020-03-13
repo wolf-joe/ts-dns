@@ -1,10 +1,10 @@
 package TSDNS
 
 import (
-	"../DNSCaller"
-	"../GFWList"
-	"../Hosts"
-	"../IPSet"
+	"github.com/wolf-joe/ts-dns/DNSCaller"
+	"github.com/wolf-joe/ts-dns/GFWList"
+	"github.com/wolf-joe/ts-dns/Hosts"
+	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"strings"
 )
 

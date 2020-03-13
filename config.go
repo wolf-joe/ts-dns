@@ -1,14 +1,14 @@
 package main
 
 import (
-	DNS "./DNSCaller"
-	"./GFWList"
-	"./Hosts"
-	"./IPSet"
-	"./TSDNS"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	DNS "github.com/wolf-joe/ts-dns/DNSCaller"
+	"github.com/wolf-joe/ts-dns/GFWList"
+	"github.com/wolf-joe/ts-dns/Hosts"
+	ipset "github.com/wolf-joe/ts-dns/IPSet"
+	"github.com/wolf-joe/ts-dns/TSDNS"
 	"golang.org/x/net/proxy"
 	"log"
 	"os"

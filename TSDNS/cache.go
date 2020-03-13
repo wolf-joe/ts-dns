@@ -1,9 +1,9 @@
 package TSDNS
 
 import (
-	"../TTLMap"
 	"fmt"
 	"github.com/miekg/dns"
+	"github.com/wolf-joe/ts-dns/TTLMap"
 	"strconv"
 	"time"
 )

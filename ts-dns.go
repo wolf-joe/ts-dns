@@ -1,9 +1,9 @@
 package main
 
 import (
-	"./TSDNS"
 	"fmt"
 	"github.com/miekg/dns"
+	"github.com/wolf-joe/ts-dns/TSDNS"
 	"log"
 )
 
