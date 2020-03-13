@@ -3,6 +3,7 @@ package DNSCaller
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
@@ -19,6 +20,9 @@ type Caller interface {
 }
 
 func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dialer) (r *dns.Msg, err error) {
+	if request == nil || len(request.Question) <= 0 || address == "" {
+		return nil, fmt.Errorf("request or server address cannot be empty")
+	}
 	var proxyConn net.Conn
 	// 返回前关闭代理连接
 	defer func() {
