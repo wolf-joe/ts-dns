@@ -1,4 +1,4 @@
-package TTLMap
+package cache
 
 import (
 	"sync"
@@ -19,30 +19,34 @@ type TTLMap struct {
 	mux     *sync.RWMutex
 }
 
-func (ttlMap *TTLMap) Set(key string, value interface{}, ex time.Duration) {
-	ttlMap.mux.Lock()
-	defer ttlMap.mux.Unlock()
-	ttlMap.itemMap[key] = &item{value: value, expire: time.Now().Add(ex).UnixNano()}
+func (m *TTLMap) Set(key string, value interface{}, ex time.Duration) {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	m.itemMap[key] = &item{value: value, expire: time.Now().Add(ex).UnixNano()}
 }
 
-func (ttlMap *TTLMap) Get(key string) (interface{}, bool) {
-	ttlMap.mux.Lock()
-	defer ttlMap.mux.Unlock()
-	value, ok := ttlMap.itemMap[key]
+func (m *TTLMap) Get(key string) (interface{}, bool) {
+	// get item, using read lock
+	m.mux.RLock()
+	value, ok := m.itemMap[key]
+	m.mux.RUnlock()
 	if !ok || time.Now().UnixNano() >= value.expire {
-		delete(ttlMap.itemMap, key)
+		// delete item, use write lock
+		m.mux.Lock()
+		delete(m.itemMap, key)
+		m.mux.Unlock()
 		return nil, false
 	}
 	return value.value, true
 }
 
-func (ttlMap TTLMap) Len() int {
-	ttlMap.mux.RLock()
-	defer ttlMap.mux.RUnlock()
-	return len(ttlMap.itemMap)
+func (m TTLMap) Len() int {
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+	return len(m.itemMap)
 }
 
-func NewMap(cleanTick time.Duration) (m *TTLMap) {
+func NewTTLMap(cleanTick time.Duration) (m *TTLMap) {
 	if cleanTick < MinCleanTick {
 		cleanTick = MinCleanTick
 	}

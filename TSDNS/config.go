@@ -5,11 +5,12 @@ import (
 	"github.com/wolf-joe/ts-dns/GFWList"
 	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
+	"github.com/wolf-joe/ts-dns/cache"
 	"strings"
 )
 
 type Config struct {
-	Cache        *DNSCache
+	Cache        *cache.DNSCache
 	Listen       string
 	GFWChecker   *GFWList.DomainChecker
 	HostsReaders []Hosts.Reader

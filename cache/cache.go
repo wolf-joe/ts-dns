@@ -1,9 +1,8 @@
-package TSDNS
+package cache
 
 import (
 	"fmt"
 	"github.com/miekg/dns"
-	"github.com/wolf-joe/ts-dns/TTLMap"
 	"strconv"
 	"time"
 )
@@ -26,7 +25,7 @@ func getSubnet(extra []dns.RR) string {
 }
 
 type DNSCache struct {
-	ttlMap *TTLMap.TTLMap
+	ttlMap *TTLMap
 	size   int
 	minTTL time.Duration
 	maxTTL time.Duration
@@ -65,8 +64,8 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	cache.ttlMap.Set(cacheKey, r, ex)
 }
 
-func NewDNSCache(size int, minTTL, maxTTL time.Duration) (cache *DNSCache) {
-	cache = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
-	cache.ttlMap = TTLMap.NewMap(time.Minute)
+func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {
+	c = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
+	c.ttlMap = NewTTLMap(time.Minute)
 	return
 }

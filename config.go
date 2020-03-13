@@ -9,6 +9,7 @@ import (
 	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/TSDNS"
+	"github.com/wolf-joe/ts-dns/cache"
 	"golang.org/x/net/proxy"
 	"log"
 	"os"
@@ -166,7 +167,7 @@ func initConfig() (config *TSDNS.Config) {
 	if maxTTL < minTTL {
 		maxTTL = minTTL
 	}
-	config.Cache = TSDNS.NewDNSCache(cacheSize, minTTL, maxTTL)
+	config.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
 	// 检测配置有效性
 	if len(config.GroupMap) <= 0 || len(config.GroupMap["clean"].Callers) <= 0 || len(config.GroupMap["dirty"].Callers) <= 0 {
 		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")

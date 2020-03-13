@@ -1,4 +1,4 @@
-package TSDNS
+package cache
 
 import (
 	"github.com/miekg/dns"
