@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	MinCleanTick = time.Second
+)
+
 type item struct {
 	value  interface{}
 	expire int64
@@ -12,19 +16,18 @@ type item struct {
 
 type TTLMap struct {
 	itemMap map[string]*item
-	mux     sync.Mutex
+	mux     *sync.RWMutex
 }
 
 func (ttlMap *TTLMap) Set(key string, value interface{}, ex time.Duration) {
 	ttlMap.mux.Lock()
 	defer ttlMap.mux.Unlock()
-	delete(ttlMap.itemMap, key)
 	ttlMap.itemMap[key] = &item{value: value, expire: time.Now().Add(ex).UnixNano()}
 }
 
 func (ttlMap *TTLMap) Get(key string) (interface{}, bool) {
-	ttlMap.mux.Lock()
-	defer ttlMap.mux.Unlock()
+	ttlMap.mux.RLock()
+	defer ttlMap.mux.RUnlock()
 	value, ok := ttlMap.itemMap[key]
 	if !ok || time.Now().UnixNano() >= value.expire {
 		delete(ttlMap.itemMap, key)
@@ -34,13 +37,16 @@ func (ttlMap *TTLMap) Get(key string) (interface{}, bool) {
 }
 
 func (ttlMap TTLMap) Len() int {
-	ttlMap.mux.Lock()
-	defer ttlMap.mux.Unlock()
+	ttlMap.mux.RLock()
+	defer ttlMap.mux.RUnlock()
 	return len(ttlMap.itemMap)
 }
 
 func NewMap(cleanTick time.Duration) (m *TTLMap) {
-	m = &TTLMap{itemMap: map[string]*item{}, mux: sync.Mutex{}}
+	if cleanTick < MinCleanTick {
+		cleanTick = MinCleanTick
+	}
+	m = &TTLMap{itemMap: map[string]*item{}, mux: new(sync.RWMutex)}
 	go func() {
 		for range time.Tick(cleanTick) {
 			m.mux.Lock()

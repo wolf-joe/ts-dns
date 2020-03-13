@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewTTLMap(t *testing.T) {
-	ttlMap := NewMap(time.Second)
+	ttlMap := NewMap(time.Millisecond * 500)
 	ttlMap.Set("key1", "value1", time.Millisecond*500)
 	ttlMap.Set("key2", "value2", time.Millisecond*500)
 	val, ok := ttlMap.Get("key1")
