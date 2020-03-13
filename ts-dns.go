@@ -5,38 +5,67 @@ import (
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/config"
 	"log"
+	"net"
 )
 
 var c *config.Config
 
-func getGroupName(domain string) (group string, reason string) {
-	// 优先检测预设规则
-	for name, group := range c.GroupMap {
-		if match, ok := group.Matcher.IsMatch(domain); ok && match {
-			return name, "rule"
+// 列出dns响应中所有的ipv4地址
+func extractIPv4(r *dns.Msg) (ips []string) {
+	ips = []string{}
+	if r == nil {
+		return
+	}
+	for _, answer := range r.Answer {
+		switch answer.(type) {
+		case *dns.A:
+			ips = append(ips, answer.(*dns.A).A.String())
 		}
 	}
+	return
+}
 
-	// 判断gfwlist
-	if blocked, ok := c.GFWChecker.IsBlocked(domain); ok {
-		if blocked {
-			return "dirty", "GFWList"
-		}
-		return "clean", "GFWList"
+// 将dns响应中所有的ipv4地址加入目标group指定的ipset
+func addIPSet(group config.Group, r *dns.Msg) (err error) {
+	if group.IPSet == nil || r == nil {
+		return
 	}
-	return "clean", "default"
+	for _, ip := range extractIPv4(r) {
+		err = group.IPSet.Add(ip, group.IPSetTTL)
+	}
+	return
+}
+
+// 依次向目标组内的dns服务器转发请求，获得响应则返回
+func callDNS(group config.Group, request *dns.Msg) (r *dns.Msg) {
+	var err error
+	for _, caller := range group.Callers { // 遍历DNS服务器
+		r, err = caller.Call(request) // 发送查询请求
+		c.Cache.Set(request, r)
+		if err != nil {
+			log.Printf("[ERROR] query DNS error: %v\n", err)
+		}
+		if r != nil {
+			return
+		}
+	}
+	return nil
 }
 
 type handler struct{}
 
 func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var r *dns.Msg
+	var group config.Group
 	defer func() {
-		if r != nil {
+		if r != nil { // 写入响应
 			r.SetReply(request)
 			_ = resp.WriteMsg(r)
+			if err := addIPSet(group, r); err != nil { // 写入ipset
+				log.Printf("[ERROR] add record to ipset error: %v\n", err)
+			}
 		}
-		_ = resp.Close()
+		_ = resp.Close() // 结束连接
 	}()
 
 	question := request.Question[0]
@@ -69,31 +98,35 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		return
 	}
 
-	var err error
-	name, reason := getGroupName(question.Name)
-	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", name, reason))
-	if group, ok := c.GroupMap[name]; ok {
-		for _, caller := range group.Callers { // 遍历DNS服务器
-			r, err = caller.Call(request) // 发送查询请求
-			c.Cache.Set(request, r)
-			if err != nil {
-				log.Printf("[ERROR] query DNS error: %v\n", err)
-			}
-			if r != nil {
-				break
-			}
+	// 判断域名是否匹配指定规则
+	var name string
+	for name, group = range c.GroupMap {
+		if match, ok := group.Matcher.IsMatch(question.Name); ok && match {
+			log.Println(msg + fmt.Sprintf("match group '%s' (rules)", name))
+			r = callDNS(group, request)
+			return
 		}
-		// 将查询到的ip写入对应IPSet
-		if group.IPSet != nil {
-			for _, answer := range r.Answer {
-				switch answer.(type) {
-				case *dns.A:
-					ip := answer.(*dns.A).A.String()
-					if err = group.IPSet.Add(ip, group.IPSetTTL); err != nil {
-						log.Printf("[ERROR] add %s to IPSet error: %v\n", ip, err)
-					}
-				}
-			}
+	}
+
+	// 先假设域名属于clean组
+	group = c.GroupMap["clean"]
+	r = callDNS(group, request)
+	// 判断响应的ipv4中是否都为中国ip
+	var allInCN = true
+	for _, ip := range extractIPv4(r) {
+		if !c.CNIPs.Contain(net.ParseIP(ip)) {
+			allInCN = false
+			break
+		}
+	}
+	if allInCN {
+		log.Println(msg + fmt.Sprintf("match group 'clean' (all ipv4 in CN)"))
+	} else {
+		// 出现非中国ip，根据gfwlist再次判断
+		if blocked, ok := c.GFWChecker.IsBlocked(question.Name); ok && blocked {
+			log.Println(msg + fmt.Sprintf("match group 'dirty' (GFWList)"))
+			group = c.GroupMap["dirty"] // 判断域名属于dirty组
+			r = callDNS(group, request)
 		}
 	}
 }

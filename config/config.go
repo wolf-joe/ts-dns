@@ -13,6 +13,7 @@ type Config struct {
 	Cache        *cache.DNSCache
 	Listen       string
 	GFWChecker   *GFWList.DomainChecker
+	CNIPs        *IPMatcher
 	HostsReaders []Hosts.Reader
 	GroupMap     map[string]Group
 }

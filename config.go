@@ -25,6 +25,7 @@ var tomlConfig tomlStruct
 type tomlStruct struct {
 	Listen     string
 	GFWFile    string   `toml:"gfwlist"`
+	CNIPFile   string   `toml:"cnip"`
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
 	Cache      cacheStruct
@@ -73,6 +74,13 @@ func initConfig() (c *config.Config) {
 	}
 	if c.GFWChecker, err = GFWList.NewCheckerByFn(tomlConfig.GFWFile, true); err != nil {
 		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
+	}
+	// 读取cnip
+	if tomlConfig.CNIPFile == "" {
+		tomlConfig.CNIPFile = "cnip.txt"
+	}
+	if c.CNIPs, err = config.NewIPMatcherByFn(tomlConfig.CNIPFile); err != nil {
+		log.Fatalf("[CRITICAL] read cnip error: %v\n", err)
 	}
 	// 读取Hosts列表
 	var lines []string
