@@ -25,16 +25,16 @@ func TestNewReader(t *testing.T) {
 }
 
 func TestNewFileReader(t *testing.T) {
-	filename := "auto_remove_hosts_file"
+	filename := "go_test_hosts_file"
 	reader, err := NewFileReader(filename, 0)
 	assert.True(t, reader == nil)
 	assert.NotEqual(t, err, nil)
 
+	// 写入测试文件
 	content := "127.0.0.1 localhost\n::1 ip6-localhost"
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
 	reader, err = NewFileReader(filename, time.Second)
 	assert.Equal(t, err, nil)
-	assert.NotEqual(t, reader, nil)
 	assert.Equal(t, reader.V4("localhost"), "127.0.0.1")
 	assert.Equal(t, reader.V6("ip6-localhost"), "::1")
 	expect := "localhost 0 IN A 127.0.0.1"
@@ -42,6 +42,7 @@ func TestNewFileReader(t *testing.T) {
 
 	content = "127.0.1.1 localhost\n::2 ip6-localhost"
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
+	// 1秒之后自动重载hosts
 	time.Sleep(time.Second)
 	assert.Equal(t, reader.V4("localhost"), "127.0.1.1")
 	assert.Equal(t, reader.V6("ip6-localhost"), "::2")
