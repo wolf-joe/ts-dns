@@ -21,7 +21,7 @@ max_ttl = 86400  # 最大ttl，单位为秒
 
   [groups.dirty]  # 必选分组，匹配GFWList的域名会归类到该组
   socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析
-  dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns，或自建dnscrypt-proxy
+  dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns
   dot = ["1.0.0.1:853@cloudflare-dns.com"]  # dns over tls服务器
   # 警告：如果本机的dns指向ts-dns自身，且DoH地址中的域名被归类到该组，则会出现递归解析的情况，此时需要在上面的hosts中指定对应IP
   doh = ["https://cloudflare-dns.com/dns-query"]  # dns over https服务器
