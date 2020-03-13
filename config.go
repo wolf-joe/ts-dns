@@ -8,8 +8,8 @@ import (
 	"github.com/wolf-joe/ts-dns/GFWList"
 	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
-	"github.com/wolf-joe/ts-dns/TSDNS"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/config"
 	"golang.org/x/net/proxy"
 	"log"
 	"os"
@@ -47,7 +47,7 @@ type cacheStruct struct {
 	MaxTTL int `toml:"max_ttl"`
 }
 
-func initConfig() (config *TSDNS.Config) {
+func initConfig() (c *config.Config) {
 	// 读取命令行参数
 	var cfgPath string
 	var version bool
@@ -60,19 +60,19 @@ func initConfig() (config *TSDNS.Config) {
 	}
 	// 读取配置文件
 	if _, err := toml.DecodeFile(cfgPath, &tomlConfig); err != nil {
-		log.Fatalf("[CRITICAL] read tomlConfig error: %v\n", err)
+		log.Fatalf("[CRITICAL] read config error: %v\n", err)
 	}
-	config = &TSDNS.Config{Listen: tomlConfig.Listen, GroupMap: map[string]TSDNS.Group{}}
-	if config.Listen == "" {
-		config.Listen = ":53"
+	c = &config.Config{Listen: tomlConfig.Listen, GroupMap: map[string]config.Group{}}
+	if c.Listen == "" {
+		c.Listen = ":53"
 	}
 	// 读取gfwlist
 	var err error
 	if tomlConfig.GFWFile == "" {
 		tomlConfig.GFWFile = "gfwlist.txt"
 	}
-	if config.GFWChecker, err = GFWList.NewCheckerByFn(tomlConfig.GFWFile, true); err != nil {
-		log.Fatalf("[CRITICAL] read GFWFile error: %v\n", err)
+	if c.GFWChecker, err = GFWList.NewCheckerByFn(tomlConfig.GFWFile, true); err != nil {
+		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
 	}
 	// 读取Hosts列表
 	var lines []string
@@ -81,14 +81,14 @@ func initConfig() (config *TSDNS.Config) {
 	}
 	if len(lines) > 0 {
 		text := strings.Join(lines, "\n")
-		config.HostsReaders = append(config.HostsReaders, Hosts.NewTextReader(text))
+		c.HostsReaders = append(c.HostsReaders, Hosts.NewTextReader(text))
 	}
 	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range tomlConfig.HostsFiles {
 		if reader, err := Hosts.NewFileReader(filename, 0); err != nil {
-			log.Printf("[WARNING] read Hosts error: %v\n", err)
+			log.Printf("[WARNING] read hosts error: %v\n", err)
 		} else {
-			config.HostsReaders = append(config.HostsReaders, reader)
+			c.HostsReaders = append(c.HostsReaders, reader)
 		}
 	}
 	// 读取每个域名组的配置信息
@@ -138,9 +138,9 @@ func initConfig() (config *TSDNS.Config) {
 				callers = append(callers, &DNS.DoHCaller{Url: addr, Dialer: dialer})
 			}
 		}
-		tsGroup := TSDNS.Group{Callers: callers}
+		tsGroup := config.Group{Callers: callers}
 		// 读取匹配规则
-		tsGroup.Matcher = TSDNS.NewDomainMatcher(group.Rules)
+		tsGroup.Matcher = config.NewDomainMatcher(group.Rules)
 		// 读取IPSet名称和ttl
 		if group.IPSetName != "" {
 			if group.IPSetTTL > 0 {
@@ -151,7 +151,7 @@ func initConfig() (config *TSDNS.Config) {
 				log.Fatalf("[CRITICAL] create ipset error: %v\n", err)
 			}
 		}
-		config.GroupMap[name] = tsGroup
+		c.GroupMap[name] = tsGroup
 	}
 	// 读取cache配置
 	cacheSize, minTTL, maxTTL := 4096, time.Minute, 24*time.Hour
@@ -167,10 +167,10 @@ func initConfig() (config *TSDNS.Config) {
 	if maxTTL < minTTL {
 		maxTTL = minTTL
 	}
-	config.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
+	c.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
 	// 检测配置有效性
-	if len(config.GroupMap) <= 0 || len(config.GroupMap["clean"].Callers) <= 0 || len(config.GroupMap["dirty"].Callers) <= 0 {
-		log.Fatalln("[CRITICAL] DNS of clean/dirty group cannot be empty")
+	if len(c.GroupMap) <= 0 || len(c.GroupMap["clean"].Callers) <= 0 || len(c.GroupMap["dirty"].Callers) <= 0 {
+		log.Fatalln("[CRITICAL] dns of clean/dirty group cannot be empty")
 	}
 	return
 }

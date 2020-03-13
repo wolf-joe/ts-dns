@@ -1,2 +1,1 @@
-# go-ipset
-COPY FROM [github.com/janeczku/go-ipset](https://github.com/janeczku/go-ipset)
+* `ipset.go` COPY FROM [github.com/janeczku/go-ipset](https://github.com/janeczku/go-ipset)

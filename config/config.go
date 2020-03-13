@@ -1,4 +1,4 @@
-package TSDNS
+package config
 
 import (
 	"github.com/wolf-joe/ts-dns/DNSCaller"

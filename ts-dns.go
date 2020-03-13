@@ -3,22 +3,22 @@ package main
 import (
 	"fmt"
 	"github.com/miekg/dns"
-	"github.com/wolf-joe/ts-dns/TSDNS"
+	"github.com/wolf-joe/ts-dns/config"
 	"log"
 )
 
-var config *TSDNS.Config
+var c *config.Config
 
 func getGroupName(domain string) (group string, reason string) {
 	// 优先检测预设规则
-	for name, group := range config.GroupMap {
+	for name, group := range c.GroupMap {
 		if match, ok := group.Matcher.IsMatch(domain); ok && match {
 			return name, "rule"
 		}
 	}
 
 	// 判断gfwlist
-	if blocked, ok := config.GFWChecker.IsBlocked(domain); ok {
+	if blocked, ok := c.GFWChecker.IsBlocked(domain); ok {
 		if blocked {
 			return "dirty", "GFWList"
 		}
@@ -43,7 +43,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
-		for _, reader := range config.HostsReaders {
+		for _, reader := range c.HostsReaders {
 			// hostname为domain去掉末尾"."符号后的值
 			record, hostname := "", question.Name[:len(question.Name)-1]
 			if record = reader.GenRecord(hostname, question.Qtype); record == "" {
@@ -64,7 +64,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 检测dns缓存是否命中
-	if r = config.Cache.Get(request); r != nil {
+	if r = c.Cache.Get(request); r != nil {
 		log.Println(msg + "hit cache")
 		return
 	}
@@ -72,10 +72,10 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var err error
 	name, reason := getGroupName(question.Name)
 	log.Println(msg + fmt.Sprintf("match group '%s' (%s)", name, reason))
-	if group, ok := config.GroupMap[name]; ok {
+	if group, ok := c.GroupMap[name]; ok {
 		for _, caller := range group.Callers { // 遍历DNS服务器
 			r, err = caller.Call(request) // 发送查询请求
-			config.Cache.Set(request, r)
+			c.Cache.Set(request, r)
 			if err != nil {
 				log.Printf("[ERROR] query DNS error: %v\n", err)
 			}
@@ -99,10 +99,10 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 }
 
 func main() {
-	config = initConfig()
-	srv := &dns.Server{Addr: config.Listen, Net: "udp"}
+	c = initConfig()
+	srv := &dns.Server{Addr: c.Listen, Net: "udp"}
 	srv.Handler = &handler{}
-	log.Printf("[WARNING] Listen on %s/udp\n", config.Listen)
+	log.Printf("[WARNING] Listen on %s/udp\n", c.Listen)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("[CRITICAL] liten udp error: %v\n", err)
 	}
