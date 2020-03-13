@@ -26,8 +26,8 @@ func (ttlMap *TTLMap) Set(key string, value interface{}, ex time.Duration) {
 }
 
 func (ttlMap *TTLMap) Get(key string) (interface{}, bool) {
-	ttlMap.mux.RLock()
-	defer ttlMap.mux.RUnlock()
+	ttlMap.mux.Lock()
+	defer ttlMap.mux.Unlock()
 	value, ok := ttlMap.itemMap[key]
 	if !ok || time.Now().UnixNano() >= value.expire {
 		delete(ttlMap.itemMap, key)
