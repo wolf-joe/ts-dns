@@ -3,6 +3,7 @@
 
 listen = ":53"  # 监听端口
 gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官方地址：https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
+cnip = "cnip.txt"  # 中国ip网段列表，用于辅助域名分组
 
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 [hosts] # 自定义域名映射
