@@ -1,9 +1,9 @@
 package config
 
 import (
-	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/ipset"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 )

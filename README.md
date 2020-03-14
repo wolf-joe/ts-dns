@@ -88,13 +88,14 @@
 
 ## TODO
 
-* 配置文件重载
+* 配置文件自动重载
 * 默认使用ECS转发DNS请求
 * DNS并发响应
 
 ## 依赖
 * [github.com/miekg/dns](https://github.com/miekg/dns)
 * [github.com/coreos/go-semver/semver](https://github.com/coreos/go-semver/semver)
+* [github.com/BurntSushi/toml](https://github.com/BurntSushi/toml)
 
 ## 特别鸣谢
 * [github.com/janeczku/go-ipset](https://github.com/janeczku/go-ipset)
