@@ -2,9 +2,9 @@ package config
 
 import (
 	"github.com/wolf-joe/ts-dns/GFWList"
-	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"strings"
 )
@@ -14,7 +14,7 @@ type Config struct {
 	Listen       string
 	GFWChecker   *GFWList.DomainChecker
 	CNIPs        *IPMatcher
-	HostsReaders []Hosts.Reader
+	HostsReaders []hosts.Reader
 	GroupMap     map[string]Group
 }
 

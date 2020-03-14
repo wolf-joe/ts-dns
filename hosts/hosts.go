@@ -1,8 +1,7 @@
-package Hosts
+package hosts
 
 import (
 	"fmt"
-	"github.com/miekg/dns"
 	"io/ioutil"
 	"net"
 	"strings"
@@ -10,10 +9,13 @@ import (
 	"time"
 )
 
+const (
+	MinReloadTick = time.Second
+)
+
 type Reader interface {
-	V4(hostname string) string
-	V6(hostname string) string
-	GenRecord(hostname string, t uint16) string
+	IP(hostname string, ipv6 bool) string
+	Record(hostname string, ipv6 bool) string
 }
 
 type TextReader struct {
@@ -21,30 +23,29 @@ type TextReader struct {
 	v6Map map[string]string
 }
 
-func (r *TextReader) V4(hostname string) string {
-	if val, ok := r.v4Map[hostname]; ok {
-		return val
+// 获取hostname对应的ip地址，如不存在则返回空串
+func (r *TextReader) IP(hostname string, ipv6 bool) (val string) {
+	if ipv6 {
+		val, _ = r.v6Map[hostname]
+	} else {
+		val, _ = r.v4Map[hostname]
 	}
-	return ""
+	return
 }
-func (r *TextReader) V6(hostname string) string {
-	if val, ok := r.v6Map[hostname]; ok {
-		return val
+
+// 生成hostname对应的dns记录，格式为"hostname ttl IN A ip"，如不存在则返回空串
+func (r *TextReader) Record(hostname string, ipv6 bool) (record string) {
+	ip, t := r.IP(hostname, ipv6), "A"
+	if ipv6 {
+		t = "AAAA"
 	}
-	return ""
-}
-func (r *TextReader) GenRecord(hostname string, t uint16) (record string) {
-	if t == dns.TypeA {
-		if ip := r.V4(hostname); ip != "" {
-			return fmt.Sprintf("%s 0 IN A %s", hostname, ip)
-		}
-	} else if t == dns.TypeAAAA {
-		if ip := r.V6(hostname); ip != "" {
-			return fmt.Sprintf("%s 0 IN AAAA %s", hostname, ip)
-		}
+	if ip == "" {
+		return ""
 	}
-	return ""
+	return fmt.Sprintf("%s 0 IN %s %s", hostname, t, ip)
 }
+
+// 解析文本内容中的Hosts
 func NewTextReader(text string) (r *TextReader) {
 	r = &TextReader{v4Map: map[string]string{}, v6Map: map[string]string{}}
 	for _, line := range strings.Split(text, "\n") {
@@ -66,7 +67,7 @@ func NewTextReader(text string) (r *TextReader) {
 }
 
 type FileReader struct {
-	mux        sync.Mutex
+	mux        *sync.Mutex
 	filename   string
 	timestamp  time.Time
 	reloadTick time.Duration
@@ -87,24 +88,29 @@ func (r *FileReader) reload() {
 	}
 	r.timestamp = time.Now()
 }
-func (r *FileReader) V4(hostname string) string {
+
+// 获取hostname对应的ip地址，如不存在则返回空串
+func (r *FileReader) IP(hostname string, ipv6 bool) string {
 	r.reload()
-	return r.reader.V4(hostname)
+	return r.reader.IP(hostname, ipv6)
 }
-func (r *FileReader) V6(hostname string) string {
+
+// 生成hostname对应的dns记录，格式为"hostname ttl IN A ip"，如不存在则返回空串
+func (r *FileReader) Record(hostname string, ipv6 bool) string {
 	r.reload()
-	return r.reader.V6(hostname)
+	return r.reader.Record(hostname, ipv6)
 }
-func (r *FileReader) GenRecord(hostname string, t uint16) string {
-	r.reload()
-	return r.reader.GenRecord(hostname, t)
-}
+
+// 解析目标文件内容中的Hosts
 func NewFileReader(filename string, reloadTick time.Duration) (r *FileReader, err error) {
+	if reloadTick < MinReloadTick {
+		reloadTick = MinReloadTick
+	}
 	var raw []byte
 	if raw, err = ioutil.ReadFile(filename); err != nil {
 		return
 	}
-	r = &FileReader{mux: sync.Mutex{}, filename: filename, reloadTick: reloadTick}
+	r = &FileReader{mux: new(sync.Mutex), filename: filename, reloadTick: reloadTick}
 	r.reader = NewTextReader(string(raw))
 	r.timestamp = time.Now()
 	return

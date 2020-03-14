@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/wolf-joe/ts-dns/GFWList"
-	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/config"
+	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
 	"log"
@@ -89,11 +89,11 @@ func initConfig() (c *config.Config) {
 	}
 	if len(lines) > 0 {
 		text := strings.Join(lines, "\n")
-		c.HostsReaders = append(c.HostsReaders, Hosts.NewTextReader(text))
+		c.HostsReaders = append(c.HostsReaders, hosts.NewTextReader(text))
 	}
 	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range tomlConfig.HostsFiles {
-		if reader, err := Hosts.NewFileReader(filename, 0); err != nil {
+		if reader, err := hosts.NewFileReader(filename, 0); err != nil {
 			log.Printf("[WARNING] read hosts error: %v\n", err)
 		} else {
 			c.HostsReaders = append(c.HostsReaders, reader)

@@ -72,12 +72,12 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
+		ipv6 := question.Qtype == dns.TypeAAAA
 		for _, reader := range c.HostsReaders {
-			// hostname为domain去掉末尾"."符号后的值
-			record, hostname := "", question.Name[:len(question.Name)-1]
-			if record = reader.GenRecord(hostname, question.Qtype); record == "" {
-				// 如hostname无对应的hosts记录，则用domain再找一次
-				record = reader.GenRecord(question.Name, question.Qtype)
+			record, hostname := "", question.Name
+			if record = reader.Record(hostname, ipv6); record == "" {
+				// 去掉末尾的根域名再找一次
+				record = reader.Record(hostname[:len(hostname)-1], ipv6)
 			}
 			if record != "" {
 				if ret, err := dns.NewRR(record); err != nil {

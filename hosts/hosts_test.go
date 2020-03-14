@@ -1,7 +1,6 @@
-package Hosts
+package hosts
 
 import (
-	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
@@ -9,19 +8,19 @@ import (
 	"time"
 )
 
-func TestNewReader(t *testing.T) {
+func TestNewTextReader(t *testing.T) {
 	content := "# comment\n\n 256.0.0.0 ne\n" +
 		" 127.0.0.1 localhost \n \n gggg::0 ip6-ne \n ::1 ip6-localhost "
 	reader := NewTextReader(content)
-	assert.Equal(t, reader.V4("ne"), "")
-	assert.Equal(t, reader.V4("localhost"), "127.0.0.1")
-	assert.Equal(t, reader.V6("ip6-ne"), "")
-	assert.Equal(t, reader.V6("ip6-localhost"), "::1")
-	assert.Equal(t, reader.GenRecord("ne", dns.TypeA), "")
+	assert.Equal(t, reader.IP("ne", false), "")
+	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
+	assert.Equal(t, reader.IP("ip6-ne", true), "")
+	assert.Equal(t, reader.IP("ip6-localhost", true), "::1")
+	assert.Equal(t, reader.Record("ne", false), "")
 	expect := "localhost 0 IN A 127.0.0.1"
-	assert.Equal(t, reader.GenRecord("localhost", dns.TypeA), expect)
+	assert.Equal(t, reader.Record("localhost", false), expect)
 	expect = "ip6-localhost 0 IN AAAA ::1"
-	assert.Equal(t, reader.GenRecord("ip6-localhost", dns.TypeAAAA), expect)
+	assert.Equal(t, reader.Record("ip6-localhost", true), expect)
 }
 
 func TestNewFileReader(t *testing.T) {
@@ -35,19 +34,19 @@ func TestNewFileReader(t *testing.T) {
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
 	reader, err = NewFileReader(filename, time.Second)
 	assert.Equal(t, err, nil)
-	assert.Equal(t, reader.V4("localhost"), "127.0.0.1")
-	assert.Equal(t, reader.V6("ip6-localhost"), "::1")
+	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
+	assert.Equal(t, reader.IP("ip6-localhost", true), "::1")
 	expect := "localhost 0 IN A 127.0.0.1"
-	assert.Equal(t, reader.GenRecord("localhost", dns.TypeA), expect)
+	assert.Equal(t, reader.Record("localhost", false), expect)
 
 	content = "127.0.1.1 localhost\n::2 ip6-localhost"
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
 	// 1秒之后自动重载hosts
 	time.Sleep(time.Second)
-	assert.Equal(t, reader.V4("localhost"), "127.0.1.1")
-	assert.Equal(t, reader.V6("ip6-localhost"), "::2")
+	assert.Equal(t, reader.IP("localhost", false), "127.0.1.1")
+	assert.Equal(t, reader.IP("ip6-localhost", true), "::2")
 	expect = "ip6-localhost 0 IN AAAA ::2"
-	assert.Equal(t, reader.GenRecord("ip6-localhost", dns.TypeAAAA), expect)
+	assert.Equal(t, reader.Record("ip6-localhost", true), expect)
 
 	_ = os.Remove(filename)
 }
