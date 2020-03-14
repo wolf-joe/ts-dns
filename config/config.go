@@ -1,11 +1,11 @@
 package config
 
 import (
-	"github.com/wolf-joe/ts-dns/DNSCaller"
 	"github.com/wolf-joe/ts-dns/GFWList"
 	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/outbound"
 	"strings"
 )
 
@@ -19,7 +19,7 @@ type Config struct {
 }
 
 type Group struct {
-	Callers  []DNSCaller.Caller
+	Callers  []outbound.Caller
 	Matcher  *DomainMatcher
 	IPSet    *ipset.IPSet
 	IPSetTTL int

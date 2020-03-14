@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	DNS "github.com/wolf-joe/ts-dns/DNSCaller"
 	"github.com/wolf-joe/ts-dns/GFWList"
 	"github.com/wolf-joe/ts-dns/Hosts"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/config"
+	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
 	"log"
 	"os"
@@ -106,8 +106,8 @@ func initConfig() (c *config.Config) {
 		if group.Socks5 != "" {
 			dialer, _ = proxy.SOCKS5("tcp", group.Socks5, nil, proxy.Direct)
 		}
-		// 为每个dns服务器创建Caller对象
-		var callers []DNS.Caller
+		// 为每个出站dns服务器地址创建对应Caller对象
+		var callers []outbound.Caller
 		for _, addr := range group.DNS { // TCP/UDP服务器
 			useTcp := false
 			if strings.HasSuffix(addr, "/tcp") {
@@ -118,9 +118,9 @@ func initConfig() (c *config.Config) {
 					addr += ":53"
 				}
 				if useTcp {
-					callers = append(callers, &DNS.TCPCaller{Address: addr, Dialer: dialer})
+					callers = append(callers, &outbound.TCPCaller{Address: addr, Dialer: dialer})
 				} else {
-					callers = append(callers, &DNS.UDPCaller{Address: addr, Dialer: dialer})
+					callers = append(callers, &outbound.UDPCaller{Address: addr, Dialer: dialer})
 				}
 			}
 		}
@@ -136,14 +136,14 @@ func initConfig() (c *config.Config) {
 					addr += ":853"
 				}
 				if serverName != "" {
-					callers = append(callers, DNS.NewTLSCaller(addr, dialer, serverName, false))
+					callers = append(callers, outbound.NewTLSCaller(addr, dialer, serverName, false))
 				}
 			}
 		}
 		dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
 		for _, addr := range group.DoH { // dns over https服务器，格式为https://domain/dns-query
 			if dohReg.MatchString(addr) {
-				callers = append(callers, &DNS.DoHCaller{Url: addr, Dialer: dialer})
+				callers = append(callers, &outbound.DoHCaller{Url: addr, Dialer: dialer})
 			}
 		}
 		tsGroup := config.Group{Callers: callers}

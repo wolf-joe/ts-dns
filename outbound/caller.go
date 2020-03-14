@@ -1,4 +1,4 @@
-package DNSCaller
+package outbound
 
 import (
 	"bytes"
