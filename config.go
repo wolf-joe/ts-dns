@@ -4,11 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/wolf-joe/ts-dns/GFWList"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/config"
 	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
 	"log"
@@ -72,7 +72,7 @@ func initConfig() (c *config.Config) {
 	if tomlConfig.GFWFile == "" {
 		tomlConfig.GFWFile = "gfwlist.txt"
 	}
-	if c.GFWChecker, err = GFWList.NewCheckerByFn(tomlConfig.GFWFile, true); err != nil {
+	if c.GFWMatcher, err = matcher.NewABPByFile(tomlConfig.GFWFile, true); err != nil {
 		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
 	}
 	// 读取cnip
@@ -148,7 +148,7 @@ func initConfig() (c *config.Config) {
 		}
 		tsGroup := config.Group{Callers: callers}
 		// 读取匹配规则
-		tsGroup.Matcher = config.NewDomainMatcher(group.Rules)
+		tsGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
 		// 读取IPSet名称和ttl
 		if group.IPSetName != "" {
 			if group.IPSetTTL > 0 {

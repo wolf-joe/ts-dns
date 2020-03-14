@@ -69,7 +69,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}()
 
 	question := request.Question[0]
-	msg := fmt.Sprintf("[INFO] domain %s from %s ", question.Name, resp.RemoteAddr())
+	msg := fmt.Sprintf("[INFO] %s from %s ", question.Name, resp.RemoteAddr())
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
@@ -101,7 +101,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	// 判断域名是否匹配指定规则
 	var name string
 	for name, group = range c.GroupMap {
-		if match, ok := group.Matcher.IsMatch(question.Name); ok && match {
+		if match, ok := group.Matcher.Match(question.Name); ok && match {
 			log.Println(msg + fmt.Sprintf("match group '%s' (rules)", name))
 			r = callDNS(group, request)
 			return
@@ -120,13 +120,15 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		}
 	}
 	if allInCN {
-		log.Println(msg + fmt.Sprintf("match group 'clean' (all ipv4 in CN)"))
+		log.Println(msg + fmt.Sprintf("match group 'clean' (cn ip)"))
 	} else {
 		// 出现非中国ip，根据gfwlist再次判断
-		if blocked, ok := c.GFWChecker.IsBlocked(question.Name); ok && blocked {
-			log.Println(msg + fmt.Sprintf("match group 'dirty' (GFWList)"))
+		if blocked, ok := c.GFWMatcher.Match(question.Name); ok && blocked {
+			log.Println(msg + fmt.Sprintf("match group 'dirty' (in gfwlist)"))
 			group = c.GroupMap["dirty"] // 判断域名属于dirty组
 			r = callDNS(group, request)
+		} else {
+			log.Println(msg + fmt.Sprintf("match group 'clean' (not in gfwlist)"))
 		}
 	}
 }

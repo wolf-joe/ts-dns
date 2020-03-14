@@ -1,18 +1,17 @@
 package config
 
 import (
-	"github.com/wolf-joe/ts-dns/GFWList"
 	ipset "github.com/wolf-joe/ts-dns/IPSet"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
-	"strings"
 )
 
 type Config struct {
 	Cache        *cache.DNSCache
 	Listen       string
-	GFWChecker   *GFWList.DomainChecker
+	GFWMatcher   *matcher.ABPlus
 	CNIPs        *IPMatcher
 	HostsReaders []hosts.Reader
 	GroupMap     map[string]Group
@@ -20,22 +19,7 @@ type Config struct {
 
 type Group struct {
 	Callers  []outbound.Caller
-	Matcher  *DomainMatcher
+	Matcher  *matcher.ABPlus
 	IPSet    *ipset.IPSet
 	IPSetTTL int
-}
-
-type DomainMatcher struct {
-	checker *GFWList.DomainChecker
-}
-
-func (matcher *DomainMatcher) IsMatch(domain string) (match bool, ok bool) {
-	return matcher.checker.IsBlocked(domain)
-}
-
-func NewDomainMatcher(rules []string) (matcher *DomainMatcher) {
-	matcher = new(DomainMatcher)
-	text := strings.Join(rules, "\n")
-	matcher.checker, _ = GFWList.NewCheckerByStr(text, false)
-	return
 }
