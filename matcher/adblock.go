@@ -86,6 +86,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 			} else {
 				matcher.blockedRegs = append(matcher.blockedRegs, regex)
 			}
+			continue
 		}
 		// 通过顶级域名判断域名是否有效
 		var tld string
