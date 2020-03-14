@@ -10,19 +10,21 @@
 
 ## 基本特性
 
-* 默认基于GFWList进行分组；
+* 默认基于`CN IP列表` + `GFWList`进行域名分组；
 * 支持DNS over UDP/TCP/TLS/HTTP；
 * 支持通过socks5代理转发DNS请求；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持DNS查询缓存（包括EDNS Client Subnet）；
 * 支持将查询结果添加至IPSet。
 
-## 域名分组说明
+## DNS查询请求处理流程
 
-1. 域名符合指定规则时将分配至对应组；
-2. 域名符合GFWList黑名单时分配到`dirty`组；
-3. 域名符合GFWList白名单时分配到`clean`组；
-4. 以上条件均不符合时分配到`clean`组。
+1. 当域名匹配指定规则（配置文件里各组的`rules`）时，将请求转发至对应组上游DNS并直接返回；
+2. 如未匹配规则，则假设域名为`clean`组，向`clean`组的上游DNS转发查询请求，并做如下判断：
+  * 如果查询结果中所有IPv4地址均为`CN IP`，则直接返回；
+  * 如果查询结果中出现非`CN IP`，进一步判断：
+    * 如果该域名匹配GFWList列表，则向`dirty`组的上游DNS转发查询请求并返回；
+    * 否则返回查询结果。
 
 ## 使用说明
 
@@ -39,7 +41,7 @@
 1. 默认配置（`ts-dns.toml`），开箱即用
   ```toml
   listen = ":53"
-  gfwlist = "gfwlist.txt"
+  cnip = "cnip.txt"
 
   [groups]
     [groups.clean]

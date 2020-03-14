@@ -17,5 +17,8 @@
 src/
 pkg/
 bin/
-gfwlist*.txt
 dist/
+
+delegated-apnic-latest
+cnip.txt
+gfwlist*.txt

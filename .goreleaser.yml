@@ -3,6 +3,8 @@
 before:
   hooks:
     - wget https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt -O gfwlist.txt
+    - wget -c http://ftp.apnic.net/stats/apnic/delegated-apnic-latest
+    - cat delegated-apnic-latest | awk -F '|' '/CN/&&/ipv4/ {print $4 "/" 32-log($5)/log(2)}' > cnip.txt
 builds:
   - env:
       - CGO_ENABLED=0
@@ -49,6 +51,7 @@ archives:
       - LICENSE
       - ts-dns*.toml
       - gfwlist.txt
+      - cnip.txt
 snapshot:
   name_template: "{{ .Tag }}"
 changelog:
