@@ -12,7 +12,7 @@ type Config struct {
 	Cache        *cache.DNSCache
 	Listen       string
 	GFWMatcher   *matcher.ABPlus
-	CNIPs        *IPMatcher
+	CNIPs        *ipset.RamSet
 	HostsReaders []hosts.Reader
 	GroupMap     map[string]Group
 }

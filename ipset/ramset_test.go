@@ -1,4 +1,4 @@
-package config
+package ipset
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -8,15 +8,15 @@ import (
 	"testing"
 )
 
-func TestIPMatcher(t *testing.T) {
-	text := "  1.2.4.8  \n 8.8.8.8 \n 1.0.0.0/8 \n  192.168.1.1/33  "
+func TestRamSet(t *testing.T) {
+	text := "  1.2.4.8  \n 8.8.8.8 \n 1.0.0.0/8 \n  192.168.1.1/33 \n ::1 \n ::2 "
 	filename := "go_test_ips_file"
 	err := ioutil.WriteFile(filename, []byte(text), 0644)
 	// 读取失败
-	matcher, err := NewIPMatcherByFn(filename + "_ne")
+	matcher, err := NewRamSetByFn(filename + "_ne")
 	assert.True(t, err != nil)
 	// 读取成功
-	matcher, err = NewIPMatcherByFn(filename)
+	matcher, err = NewRamSetByFn(filename)
 	assert.True(t, matcher != nil)
 	assert.True(t, err == nil)
 	if matcher != nil {

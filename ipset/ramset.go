@@ -1,4 +1,4 @@
-package config
+package ipset
 
 import (
 	"io/ioutil"
@@ -7,18 +7,18 @@ import (
 	"strings"
 )
 
-// 解析ip地址/ip网段
-type IPMatcher struct {
+// 在go内存中的ipset
+type RamSet struct {
 	subnet []*net.IPNet
 	ipMap  map[string]bool
 }
 
 // 判断目标ip是否在范围内
-func (matcher *IPMatcher) Contain(target net.IP) bool {
-	if _, ok := matcher.ipMap[target.String()]; ok {
+func (s *RamSet) Contain(target net.IP) bool {
+	if _, ok := s.ipMap[target.String()]; ok {
 		return true
 	}
-	for _, subnet := range matcher.subnet {
+	for _, subnet := range s.subnet {
 		if subnet.Contains(target) {
 			return true
 		}
@@ -26,28 +26,30 @@ func (matcher *IPMatcher) Contain(target net.IP) bool {
 	return false
 }
 
-func NewIPMatcherByText(text string) (matcher *IPMatcher) {
-	matcher = &IPMatcher{subnet: []*net.IPNet{}, ipMap: map[string]bool{}}
+// 用文本内容初始化一个RamSet，每行一个ip/网段
+func NewRamSetByText(text string) (s *RamSet) {
+	s = &RamSet{subnet: []*net.IPNet{}, ipMap: map[string]bool{}}
 	v4reg := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}$`)
 	cidr4reg := regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$`)
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.Trim(line, " \t\n\r")
 		if v4reg.MatchString(line) {
-			matcher.ipMap[net.ParseIP(line).String()] = true
+			s.ipMap[net.ParseIP(line).String()] = true
 		}
 		if cidr4reg.MatchString(line) {
 			if _, subnet, err := net.ParseCIDR(line); err == nil {
-				matcher.subnet = append(matcher.subnet, subnet)
+				s.subnet = append(s.subnet, subnet)
 			}
 		}
 	}
-	return matcher
+	return s
 }
 
-func NewIPMatcherByFn(filename string) (matcher *IPMatcher, err error) {
+// 用文件内容初始化一个RamSet，每行一个ip/网段
+func NewRamSetByFn(filename string) (matcher *RamSet, err error) {
 	if raw, err := ioutil.ReadFile(filename); err != nil {
 		return nil, err
 	} else {
-		return NewIPMatcherByText(string(raw)), nil
+		return NewRamSetByText(string(raw)), nil
 	}
 }

@@ -79,7 +79,7 @@ func initConfig() (c *config.Config) {
 	if tomlConfig.CNIPFile == "" {
 		tomlConfig.CNIPFile = "cnip.txt"
 	}
-	if c.CNIPs, err = config.NewIPMatcherByFn(tomlConfig.CNIPFile); err != nil {
+	if c.CNIPs, err = ipset.NewRamSetByFn(tomlConfig.CNIPFile); err != nil {
 		log.Fatalf("[CRITICAL] read cnip error: %v\n", err)
 	}
 	// 读取Hosts列表
