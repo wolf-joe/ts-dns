@@ -24,12 +24,12 @@ type Handler struct {
 	GFWMatcher   *matcher.ABPlus
 	CNIPs        *cache.RamSet
 	HostsReaders []hosts.Reader
-	GroupMap     map[string]Group
+	GroupMap     map[string]*Group
 }
 
 func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var r *dns.Msg
-	var group Group
+	var group *Group
 	defer func() {
 		if r != nil { // 写入响应
 			r.SetReply(request)
@@ -95,7 +95,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	if allInCN {
 		fields["group"] = "clean"
-		log.WithFields(fields).Infof("all cn ip / empty")
+		log.WithFields(fields).Infof("cn/empty ipv4")
 	} else {
 		// 出现非中国ip，根据gfwlist再次判断
 		if blocked, ok := handler.GFWMatcher.Match(question.Name); ok && blocked {

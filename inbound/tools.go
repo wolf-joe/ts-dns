@@ -20,7 +20,7 @@ func extractIPv4(r *dns.Msg) (ips []string) {
 }
 
 // 将dns响应中所有的ipv4地址加入目标group指定的ipset
-func addIPSet(group Group, r *dns.Msg) (err error) {
+func addIPSet(group *Group, r *dns.Msg) (err error) {
 	if group.IPSet == nil || r == nil {
 		return
 	}
@@ -31,7 +31,7 @@ func addIPSet(group Group, r *dns.Msg) (err error) {
 }
 
 // 依次向目标组内的dns服务器转发请求，获得响应则返回
-func callDNS(group Group, request *dns.Msg) (r *dns.Msg) {
+func callDNS(group *Group, request *dns.Msg) (r *dns.Msg) {
 	var err error
 	for _, caller := range group.Callers { // 遍历DNS服务器
 		r, err = caller.Call(request) // 发送查询请求

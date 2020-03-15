@@ -63,7 +63,7 @@ func initConfig() (c *inbound.Handler) {
 	if _, err := toml.DecodeFile(cfgPath, &tomlConfig); err != nil {
 		log.WithField("file", cfgPath).Fatalf("read config error: %v", err)
 	}
-	c = &inbound.Handler{Listen: tomlConfig.Listen, GroupMap: map[string]inbound.Group{}}
+	c = &inbound.Handler{Listen: tomlConfig.Listen, GroupMap: map[string]*inbound.Group{}}
 	if c.Listen == "" {
 		c.Listen = ":53"
 	}
@@ -146,7 +146,7 @@ func initConfig() (c *inbound.Handler) {
 				callers = append(callers, &outbound.DoHCaller{Url: addr, Dialer: dialer})
 			}
 		}
-		tsGroup := inbound.Group{Callers: callers}
+		tsGroup := &inbound.Group{Callers: callers}
 		// 读取匹配规则
 		tsGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
 		// 读取IPSet名称和ttl
