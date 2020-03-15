@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/BurntSushi/toml"
 	log "github.com/Sirupsen/logrus"
+	"github.com/fsnotify/fsnotify"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
@@ -12,10 +14,9 @@ import (
 	"golang.org/x/net/proxy"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
-
-var config tomlStruct
 
 type tomlStruct struct {
 	Listen     string
@@ -43,11 +44,12 @@ type cacheStruct struct {
 	MaxTTL int `toml:"max_ttl"`
 }
 
-// 从配置文件里读取ts-dns的配置并打包
-func initHandler(filename string) (h *inbound.Handler) {
-	var err error
+// 从配置文件里读取ts-dns的配置并打包。如err不为空，则在返回前会输出相应错误信息
+func initHandler(filename string) (h *inbound.Handler, err error) {
+	var config tomlStruct
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
-		log.WithField("file", filename).Fatalf("read config error: %v", err)
+		log.WithField("file", filename).Errorf("read config error: %v", err)
+		return nil, err
 	}
 	// 默认配置
 	if config.Listen == "" {
@@ -60,14 +62,16 @@ func initHandler(filename string) (h *inbound.Handler) {
 		config.CNIP = "cnip.txt"
 	}
 
-	h = &inbound.Handler{Listen: config.Listen, GroupMap: map[string]*inbound.Group{}}
+	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, GroupMap: map[string]*inbound.Group{}}
 	// 读取gfwlist
 	if h.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
-		log.WithField("file", config.GFWList).Fatalf("read gfwlist error: %v", err)
+		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
+		return nil, err
 	}
 	// 读取cnip
 	if h.CNIP, err = cache.NewRamSetByFn(config.CNIP); err != nil {
-		log.WithField("file", config.CNIP).Fatalf("read cnip error: %v", err)
+		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
+		return nil, err
 	}
 	// 读取Hosts列表
 	var lines []string
@@ -143,7 +147,8 @@ func initHandler(filename string) (h *inbound.Handler) {
 			}
 			group.IPSet, err = ipset.New(groupConf.IPSetName, "hash:ip", &ipset.Params{})
 			if err != nil {
-				log.Fatalf("create ipset error: %v", err)
+				log.Errorf("create ipset error: %v", err)
+				return nil, err
 			}
 		}
 		h.GroupMap[groupName] = group
@@ -153,10 +158,10 @@ func initHandler(filename string) (h *inbound.Handler) {
 	if config.Cache.Size != 0 {
 		cacheSize = config.Cache.Size
 	}
-	if config.Cache.MinTTL >= 0 {
+	if config.Cache.MinTTL != 0 {
 		minTTL = time.Second * time.Duration(config.Cache.MinTTL)
 	}
-	if config.Cache.MaxTTL >= 0 {
+	if config.Cache.MaxTTL != 0 {
 		maxTTL = time.Second * time.Duration(config.Cache.MaxTTL)
 	}
 	if maxTTL < minTTL {
@@ -165,7 +170,49 @@ func initHandler(filename string) (h *inbound.Handler) {
 	h.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
 	// 检测配置有效性
 	if len(h.GroupMap) <= 0 || len(h.GroupMap["clean"].Callers) <= 0 || len(h.GroupMap["dirty"].Callers) <= 0 {
-		log.Fatalf("dns of clean/dirty group cannot be empty")
+		log.Errorf("dns of clean/dirty group cannot be empty")
+		return nil, fmt.Errorf("dns of clean/dirty group cannot be empty")
 	}
 	return
+}
+
+// 持续监测目标配置文件，如文件发生变动则尝试载入，载入成功后更新现有handler的配置
+func autoReload(handle *inbound.Handler, filename string) {
+	fields := log.Fields{"file": filename}
+	// 创建监测器
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.WithFields(fields).Errorf("create watcher error: %v", err)
+		return
+	}
+	defer func() {
+		_ = watcher.Close()
+		log.WithFields(fields).Errorf("file watcher closed")
+	}()
+	// 指定监测文件
+	if err = watcher.Add(filename); err != nil {
+		log.WithFields(fields).Errorf("watch file error: %v", err)
+		return
+	}
+	// 接收文件事件
+	for {
+		select {
+		case event, ok := <-watcher.Events: // 出现文件事件
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
+				log.WithFields(fields).Warnf("file changed, reloading")
+				if newHandler, err := initHandler(filename); err == nil {
+					handle.Refresh(newHandler)
+				}
+			}
+		case err, ok := <-watcher.Errors: // 出现错误
+			if !ok {
+				return
+			}
+			log.WithFields(fields).Errorf("watch error: %v", err)
+		}
+		time.Sleep(time.Second)
+	}
 }

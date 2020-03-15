@@ -9,6 +9,7 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"net"
+	"sync"
 )
 
 type Group struct {
@@ -19,6 +20,8 @@ type Group struct {
 }
 
 type Handler struct {
+	dns.Handler
+	Mux          *sync.RWMutex
 	Listen       string
 	Cache        *cache.DNSCache
 	GFWMatcher   *matcher.ABPlus
@@ -28,6 +31,7 @@ type Handler struct {
 }
 
 func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
+	handler.Mux.RLock() // 申请读锁，持续整个请求
 	var r *dns.Msg
 	var group *Group
 	defer func() {
@@ -38,7 +42,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 				log.Errorf("add ipset error: %v", err)
 			}
 		}
-		_ = resp.Close() // 结束连接
+		handler.Mux.RUnlock() // 读锁解除
+		_ = resp.Close()      // 结束连接
 	}()
 
 	question := request.Question[0]
@@ -110,4 +115,26 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)
+}
+
+// 刷新配置，复制newHandler中除Mux、Listen之外的值
+func (handler *Handler) Refresh(newHandler *Handler) {
+	handler.Mux.Lock()
+	defer handler.Mux.Unlock()
+
+	if newHandler.Cache != nil {
+		handler.Cache = newHandler.Cache
+	}
+	if newHandler.GFWMatcher != nil {
+		handler.GFWMatcher = newHandler.GFWMatcher
+	}
+	if newHandler.CNIP != nil {
+		handler.CNIP = newHandler.CNIP
+	}
+	if newHandler.HostsReaders != nil {
+		handler.HostsReaders = newHandler.HostsReaders
+	}
+	if newHandler.GroupMap != nil {
+		handler.GroupMap = newHandler.GroupMap
+	}
 }
