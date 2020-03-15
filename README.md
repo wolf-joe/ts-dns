@@ -14,6 +14,7 @@
 * 支持DNS over UDP/TCP/TLS/HTTP；
 * 支持通过socks5代理转发DNS请求；
 * 支持多Hosts文件 + 自定义Hosts；
+* 支持配置文件自动重载；
 * 支持DNS查询缓存（包括EDNS Client Subnet）；
 * 支持将查询结果添加至IPSet。
 
@@ -21,16 +22,18 @@
 
 1. 当域名匹配指定规则（配置文件里各组的`rules`）时，将请求转发至对应组上游DNS并直接返回；
 2. 如未匹配规则，则假设域名为`clean`组，向`clean`组的上游DNS转发查询请求，并做如下判断：
-  * 如果查询结果中所有IPv4地址均为`CN IP`，则直接返回；
-  * 如果查询结果中出现非`CN IP`，进一步判断：
-    * 如果该域名匹配GFWList列表，则向`dirty`组的上游DNS转发查询请求并返回；
-    * 否则返回查询结果。
+   * 如果查询结果中所有IPv4地址均为`CN IP`，则直接返回；
+   * 如果查询结果中出现非`CN IP`，进一步判断：
+      * 如果该域名匹配GFWList列表，则向`dirty`组的上游DNS转发查询请求并返回；
+      * 否则返回查询结果。
 
 ## 使用说明
 
 1. 在[Releases页面](https://github.com/wolf-joe/ts-dns/releases)下载对应系统和平台的压缩包；
 2. 解压后按需求编辑配置文件`ts-dns.toml`（可选）并运行进程：
   ```shell
+  # ./ts-dns -c ts-dns.toml  # 指定配置文件名
+  # ./ts-dns -r  # 自动重载配置文件
   ./ts-dns
   ```
 
