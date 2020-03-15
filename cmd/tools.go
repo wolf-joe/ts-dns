@@ -61,6 +61,15 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 	if config.CNIP == "" {
 		config.CNIP = "cnip.txt"
 	}
+	if config.Cache.Size == 0 {
+		config.Cache.Size = 4096
+	}
+	if config.Cache.MinTTL == 0 {
+		config.Cache.MinTTL = 60
+	}
+	if config.Cache.MaxTTL == 0 {
+		config.Cache.MaxTTL = 86400
+	}
 
 	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, GroupMap: map[string]*inbound.Group{}}
 	// 读取gfwlist
@@ -154,20 +163,9 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		h.GroupMap[groupName] = group
 	}
 	// 读取cache配置
-	cacheSize, minTTL, maxTTL := 4096, time.Minute, 24*time.Hour
-	if config.Cache.Size != 0 {
-		cacheSize = config.Cache.Size
-	}
-	if config.Cache.MinTTL != 0 {
-		minTTL = time.Second * time.Duration(config.Cache.MinTTL)
-	}
-	if config.Cache.MaxTTL != 0 {
-		maxTTL = time.Second * time.Duration(config.Cache.MaxTTL)
-	}
-	if maxTTL < minTTL {
-		maxTTL = minTTL
-	}
-	h.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
+	minTTL := time.Duration(config.Cache.MinTTL) * time.Second
+	maxTTL := time.Duration(config.Cache.MaxTTL) * time.Second
+	h.Cache = cache.NewDNSCache(config.Cache.Size, minTTL, maxTTL)
 	// 检测配置有效性
 	if len(h.GroupMap) <= 0 || len(h.GroupMap["clean"].Callers) <= 0 || len(h.GroupMap["dirty"].Callers) <= 0 {
 		log.Errorf("dns of clean/dirty group cannot be empty")
