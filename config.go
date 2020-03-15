@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	log "github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/config"
@@ -11,7 +12,6 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -61,7 +61,7 @@ func initConfig() (c *config.Config) {
 	}
 	// 读取配置文件
 	if _, err := toml.DecodeFile(cfgPath, &tomlConfig); err != nil {
-		log.Fatalf("[CRITICAL] read config error: %v\n", err)
+		log.WithField("file", cfgPath).Fatalf("read config error: %v", err)
 	}
 	c = &config.Config{Listen: tomlConfig.Listen, GroupMap: map[string]config.Group{}}
 	if c.Listen == "" {
@@ -73,14 +73,14 @@ func initConfig() (c *config.Config) {
 		tomlConfig.GFWFile = "gfwlist.txt"
 	}
 	if c.GFWMatcher, err = matcher.NewABPByFile(tomlConfig.GFWFile, true); err != nil {
-		log.Fatalf("[CRITICAL] read gfwlist error: %v\n", err)
+		log.WithField("file", tomlConfig.GFWFile).Fatalf("read gfwlist error: %v", err)
 	}
 	// 读取cnip
 	if tomlConfig.CNIPFile == "" {
 		tomlConfig.CNIPFile = "cnip.txt"
 	}
 	if c.CNIPs, err = cache.NewRamSetByFn(tomlConfig.CNIPFile); err != nil {
-		log.Fatalf("[CRITICAL] read cnip error: %v\n", err)
+		log.WithField("file", tomlConfig.CNIPFile).Fatalf("read cnip error: %v", err)
 	}
 	// 读取Hosts列表
 	var lines []string
@@ -94,7 +94,7 @@ func initConfig() (c *config.Config) {
 	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range tomlConfig.HostsFiles {
 		if reader, err := hosts.NewFileReader(filename, 0); err != nil {
-			log.Printf("[WARNING] read hosts error: %v\n", err)
+			log.WithField("file", filename).Warnf("read hosts error: %v", err)
 		} else {
 			c.HostsReaders = append(c.HostsReaders, reader)
 		}
@@ -156,7 +156,7 @@ func initConfig() (c *config.Config) {
 			}
 			tsGroup.IPSet, err = ipset.New(group.IPSetName, "hash:ip", &ipset.Params{})
 			if err != nil {
-				log.Fatalf("[CRITICAL] create ipset error: %v\n", err)
+				log.Fatalf("create ipset error: %v", err)
 			}
 		}
 		c.GroupMap[name] = tsGroup
@@ -178,7 +178,7 @@ func initConfig() (c *config.Config) {
 	c.Cache = cache.NewDNSCache(cacheSize, minTTL, maxTTL)
 	// 检测配置有效性
 	if len(c.GroupMap) <= 0 || len(c.GroupMap["clean"].Callers) <= 0 || len(c.GroupMap["dirty"].Callers) <= 0 {
-		log.Fatalln("[CRITICAL] dns of clean/dirty group cannot be empty")
+		log.Fatalf("dns of clean/dirty group cannot be empty")
 	}
 	return
 }

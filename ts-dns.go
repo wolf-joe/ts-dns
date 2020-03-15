@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/config"
-	"log"
 	"net"
 )
 
@@ -43,7 +42,7 @@ func callDNS(group config.Group, request *dns.Msg) (r *dns.Msg) {
 		r, err = caller.Call(request) // 发送查询请求
 		c.Cache.Set(request, r)
 		if err != nil {
-			log.Printf("[ERROR] query DNS error: %v\n", err)
+			log.Errorf("query dns error: %v", err)
 		}
 		if r != nil {
 			return
@@ -62,14 +61,14 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			r.SetReply(request)
 			_ = resp.WriteMsg(r)
 			if err := addIPSet(group, r); err != nil { // 写入ipset
-				log.Printf("[ERROR] add record to ipset error: %v\n", err)
+				log.Errorf("add ipset error: %v", err)
 			}
 		}
 		_ = resp.Close() // 结束连接
 	}()
 
 	question := request.Question[0]
-	msg := fmt.Sprintf("[INFO] %s from %s ", question.Name, resp.RemoteAddr())
+	fields := log.Fields{"domain": question.Name, "src": resp.RemoteAddr()}
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
@@ -86,7 +85,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 					r = new(dns.Msg)
 					r.Answer = append(r.Answer, ret)
 				}
-				log.Println(msg + "match hosts")
+				log.WithFields(fields).Infof("hit hosts")
 				return
 			}
 		}
@@ -94,7 +93,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 
 	// 检测dns缓存是否命中
 	if r = c.Cache.Get(request); r != nil {
-		log.Println(msg + "hit cache")
+		log.WithFields(fields).Infof("hit cache")
 		return
 	}
 
@@ -102,7 +101,8 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var name string
 	for name, group = range c.GroupMap {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
-			log.Println(msg + fmt.Sprintf("match group '%s' (rules)", name))
+			fields["group"] = name
+			log.WithFields(fields).Infof("match by rules")
 			r = callDNS(group, request)
 			return
 		}
@@ -120,15 +120,18 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		}
 	}
 	if allInCN {
-		log.Println(msg + fmt.Sprintf("match group 'clean' (cn ip)"))
+		fields["group"] = "clean"
+		log.WithFields(fields).Infof("all cn ip/empty")
 	} else {
 		// 出现非中国ip，根据gfwlist再次判断
 		if blocked, ok := c.GFWMatcher.Match(question.Name); ok && blocked {
-			log.Println(msg + fmt.Sprintf("match group 'dirty' (in gfwlist)"))
+			fields["group"] = "dirty"
+			log.WithFields(fields).Infof("match gfwlist")
 			group = c.GroupMap["dirty"] // 判断域名属于dirty组
 			r = callDNS(group, request)
 		} else {
-			log.Println(msg + fmt.Sprintf("match group 'clean' (not in gfwlist)"))
+			fields["group"] = "clean"
+			log.WithFields(fields).Infof("not match gfwlist")
 		}
 	}
 }
@@ -137,8 +140,8 @@ func main() {
 	c = initConfig()
 	srv := &dns.Server{Addr: c.Listen, Net: "udp"}
 	srv.Handler = &handler{}
-	log.Printf("[WARNING] Listen on %s/udp\n", c.Listen)
+	log.Warnf("listen on %s/udp", c.Listen)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("[CRITICAL] liten udp error: %v\n", err)
+		log.Fatalf("listen udp error: %v", err)
 	}
 }
