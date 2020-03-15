@@ -18,6 +18,7 @@ src/
 pkg/
 bin/
 dist/
+go.sum
 
 delegated-apnic-latest
 cnip.txt
