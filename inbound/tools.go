@@ -21,7 +21,7 @@ func extractIPv4(r *dns.Msg) (ips []string) {
 
 // 将dns响应中所有的ipv4地址加入目标group指定的ipset
 func addIPSet(group *Group, r *dns.Msg) (err error) {
-	if group.IPSet == nil || r == nil {
+	if group == nil || group.IPSet == nil || r == nil {
 		return
 	}
 	for _, ip := range extractIPv4(r) {
