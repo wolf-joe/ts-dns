@@ -22,7 +22,7 @@ type Handler struct {
 	Listen       string
 	Cache        *cache.DNSCache
 	GFWMatcher   *matcher.ABPlus
-	CNIPs        *cache.RamSet
+	CNIP         *cache.RamSet
 	HostsReaders []hosts.Reader
 	GroupMap     map[string]*Group
 }
@@ -88,7 +88,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	// 判断响应的ipv4中是否都为中国ip
 	var allInCN = true
 	for _, ip := range extractIPv4(r) {
-		if !handler.CNIPs.Contain(net.ParseIP(ip)) {
+		if !handler.CNIP.Contain(net.ParseIP(ip)) {
 			allInCN = false
 			break
 		}
