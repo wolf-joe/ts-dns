@@ -4,10 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/config"
 	"github.com/wolf-joe/ts-dns/hosts"
-	"github.com/wolf-joe/ts-dns/ipset"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
@@ -79,7 +79,7 @@ func initConfig() (c *config.Config) {
 	if tomlConfig.CNIPFile == "" {
 		tomlConfig.CNIPFile = "cnip.txt"
 	}
-	if c.CNIPs, err = ipset.NewRamSetByFn(tomlConfig.CNIPFile); err != nil {
+	if c.CNIPs, err = cache.NewRamSetByFn(tomlConfig.CNIPFile); err != nil {
 		log.Fatalf("[CRITICAL] read cnip error: %v\n", err)
 	}
 	// 读取Hosts列表
