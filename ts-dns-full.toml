@@ -26,7 +26,6 @@ max_ttl = 86400  # 最大ttl，单位为秒
   dot = ["1.0.0.1:853@cloudflare-dns.com"]  # dns over tls服务器
   # 警告：如果本机的dns指向ts-dns自身，且DoH地址中的域名被归类到该组，则会出现递归解析的情况，此时需要在上面的hosts中指定对应IP
   doh = ["https://cloudflare-dns.com/dns-query"]  # dns over https服务器
-  rules = ["google.com"]  # 官方gfwlist里只有".google.com"规则，无法匹配"google.com"，所以手动加上
 
   # 警告：进程启动时会覆盖已有同名IPSet
   ipset = "blocked"  # 目标IPSet名称，该组所有域名的ipv4解析结果将加入到该IPSet中

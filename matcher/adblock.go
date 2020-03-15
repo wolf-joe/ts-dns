@@ -69,8 +69,14 @@ func NewABPByText(text string) (matcher *ABPlus) {
 	}
 	matcher = &ABPlus{isBlocked: map[string]bool{}}
 	for _, line := range strings.Split(text, "\n") {
-		if line == "" || line[0] == '!' || line[0] == '/' || line[0] == '[' {
-			continue // 忽略空行、注释行、path类规则、类型声明
+		if line == "" || line[0] == '!' || line[0] == '[' {
+			continue // 忽略空行、注释行、类型声明
+		} else if line[0] == '/' { // path类规则
+			if line[:13] == "/^https?:\\/\\/" && line[len(line)-5:] == "\\/.*/" { // google正则补丁
+				reg := regexp.MustCompile(line[13 : len(line)-5])
+				matcher.blockedRegs = append(matcher.blockedRegs, reg)
+			}
+			continue
 		}
 		line = strings.Replace(line, "%2F", "/", -1)
 

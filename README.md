@@ -41,6 +41,7 @@
 1. 默认配置（`ts-dns.toml`），开箱即用
   ```toml
   listen = ":53"
+  gfwlist = "gfwlist.txt"
   cnip = "cnip.txt"
 
   [groups]
@@ -49,7 +50,6 @@
 
     [groups.dirty]
     dns = [""]  # 省略
-    rules = ["google.com"]
   ```
 
 2. 指定hosts文件和自定义hosts
@@ -94,12 +94,6 @@
 * 默认使用ECS转发DNS请求
 * DNS并发响应
 
-## 依赖
-* [github.com/miekg/dns](https://github.com/miekg/dns)
-* [github.com/coreos/go-semver/semver](https://github.com/coreos/go-semver/semver)
-* [github.com/BurntSushi/toml](https://github.com/BurntSushi/toml)
-
 ## 特别鸣谢
-* [github.com/janeczku/go-ipset](https://github.com/janeczku/go-ipset)
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
 * [github.com/gfwlist/gfwlist](https://github.com/gfwlist/gfwlist)

@@ -11,4 +11,3 @@ cnip = "cnip.txt"
 
   [groups.dirty]
   dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
-  rules = ["google.com"]
