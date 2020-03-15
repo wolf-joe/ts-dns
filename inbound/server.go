@@ -1,61 +1,35 @@
-package main
+package inbound
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
-	"github.com/wolf-joe/ts-dns/config"
+	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/matcher"
+	"github.com/wolf-joe/ts-dns/outbound"
 	"net"
 )
 
-var c *config.Config
-
-// 列出dns响应中所有的ipv4地址
-func extractIPv4(r *dns.Msg) (ips []string) {
-	ips = []string{}
-	if r == nil {
-		return
-	}
-	for _, answer := range r.Answer {
-		switch answer.(type) {
-		case *dns.A:
-			ips = append(ips, answer.(*dns.A).A.String())
-		}
-	}
-	return
+type Group struct {
+	Callers  []outbound.Caller
+	Matcher  *matcher.ABPlus
+	IPSet    *ipset.IPSet
+	IPSetTTL int
 }
 
-// 将dns响应中所有的ipv4地址加入目标group指定的ipset
-func addIPSet(group config.Group, r *dns.Msg) (err error) {
-	if group.IPSet == nil || r == nil {
-		return
-	}
-	for _, ip := range extractIPv4(r) {
-		err = group.IPSet.Add(ip, group.IPSetTTL)
-	}
-	return
+type Handler struct {
+	Listen       string
+	Cache        *cache.DNSCache
+	GFWMatcher   *matcher.ABPlus
+	CNIPs        *cache.RamSet
+	HostsReaders []hosts.Reader
+	GroupMap     map[string]Group
 }
 
-// 依次向目标组内的dns服务器转发请求，获得响应则返回
-func callDNS(group config.Group, request *dns.Msg) (r *dns.Msg) {
-	var err error
-	for _, caller := range group.Callers { // 遍历DNS服务器
-		r, err = caller.Call(request) // 发送查询请求
-		c.Cache.Set(request, r)
-		if err != nil {
-			log.Errorf("query dns error: %v", err)
-		}
-		if r != nil {
-			return
-		}
-	}
-	return nil
-}
-
-type handler struct{}
-
-func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
+func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var r *dns.Msg
-	var group config.Group
+	var group Group
 	defer func() {
 		if r != nil { // 写入响应
 			r.SetReply(request)
@@ -72,7 +46,7 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
-		for _, reader := range c.HostsReaders {
+		for _, reader := range handler.HostsReaders {
 			record, hostname := "", question.Name
 			if record = reader.Record(hostname, ipv6); record == "" {
 				// 去掉末尾的根域名再找一次
@@ -92,14 +66,14 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 检测dns缓存是否命中
-	if r = c.Cache.Get(request); r != nil {
+	if r = handler.Cache.Get(request); r != nil {
 		log.WithFields(fields).Infof("hit cache")
 		return
 	}
 
 	// 判断域名是否匹配指定规则
 	var name string
-	for name, group = range c.GroupMap {
+	for name, group = range handler.GroupMap {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
 			fields["group"] = name
 			log.WithFields(fields).Infof("match by rules")
@@ -109,39 +83,31 @@ func (_ *handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	// 先假设域名属于clean组
-	group = c.GroupMap["clean"]
+	group = handler.GroupMap["clean"]
 	r = callDNS(group, request)
 	// 判断响应的ipv4中是否都为中国ip
 	var allInCN = true
 	for _, ip := range extractIPv4(r) {
-		if !c.CNIPs.Contain(net.ParseIP(ip)) {
+		if !handler.CNIPs.Contain(net.ParseIP(ip)) {
 			allInCN = false
 			break
 		}
 	}
 	if allInCN {
 		fields["group"] = "clean"
-		log.WithFields(fields).Infof("all cn ip/empty")
+		log.WithFields(fields).Infof("all cn ip / empty")
 	} else {
 		// 出现非中国ip，根据gfwlist再次判断
-		if blocked, ok := c.GFWMatcher.Match(question.Name); ok && blocked {
+		if blocked, ok := handler.GFWMatcher.Match(question.Name); ok && blocked {
 			fields["group"] = "dirty"
 			log.WithFields(fields).Infof("match gfwlist")
-			group = c.GroupMap["dirty"] // 判断域名属于dirty组
+			group = handler.GroupMap["dirty"] // 判断域名属于dirty组
 			r = callDNS(group, request)
 		} else {
 			fields["group"] = "clean"
 			log.WithFields(fields).Infof("not match gfwlist")
 		}
 	}
-}
-
-func main() {
-	c = initConfig()
-	srv := &dns.Server{Addr: c.Listen, Net: "udp"}
-	srv.Handler = &handler{}
-	log.Warnf("listen on %s/udp", c.Listen)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("listen udp error: %v", err)
-	}
+	// 设置dns缓存
+	handler.Cache.Set(request, r)
 }

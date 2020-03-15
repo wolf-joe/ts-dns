@@ -7,8 +7,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
-	"github.com/wolf-joe/ts-dns/config"
 	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/inbound"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
@@ -48,7 +48,7 @@ type cacheStruct struct {
 	MaxTTL int `toml:"max_ttl"`
 }
 
-func initConfig() (c *config.Config) {
+func initConfig() (c *inbound.Handler) {
 	// 读取命令行参数
 	var cfgPath string
 	var version bool
@@ -63,7 +63,7 @@ func initConfig() (c *config.Config) {
 	if _, err := toml.DecodeFile(cfgPath, &tomlConfig); err != nil {
 		log.WithField("file", cfgPath).Fatalf("read config error: %v", err)
 	}
-	c = &config.Config{Listen: tomlConfig.Listen, GroupMap: map[string]config.Group{}}
+	c = &inbound.Handler{Listen: tomlConfig.Listen, GroupMap: map[string]inbound.Group{}}
 	if c.Listen == "" {
 		c.Listen = ":53"
 	}
@@ -146,7 +146,7 @@ func initConfig() (c *config.Config) {
 				callers = append(callers, &outbound.DoHCaller{Url: addr, Dialer: dialer})
 			}
 		}
-		tsGroup := config.Group{Callers: callers}
+		tsGroup := inbound.Group{Callers: callers}
 		// 读取匹配规则
 		tsGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
 		// 读取IPSet名称和ttl

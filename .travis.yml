@@ -12,6 +12,7 @@ before_install:
   - go get -t -v ./...
 
 script:
+  - go build -o ts-dns github.com/wolf-joe/ts-dns/cmd
   - sudo bash -c "PATH=\$PATH:$PATH GOPATH=$GOPATH go test -race ./... -coverprofile=coverage.txt -covermode=atomic"
 
 after_success:
