@@ -32,6 +32,7 @@ func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	if proxyConn, err = caller.proxy.Dial("tcp", caller.server); err != nil {
 		return nil, err
 	}
+	defer func() { _ = proxyConn.Close() }()
 	// 打包连接
 	conn := &dns.Conn{Conn: proxyConn}
 	if caller.client.TLSConfig != nil { // dns over tls
