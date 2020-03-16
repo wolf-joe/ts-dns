@@ -1,95 +1,121 @@
 package outbound
 
 import (
+	"fmt"
+	mock "github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/proxy"
+	"io/ioutil"
 	"net"
+	"net/http"
+	"reflect"
 	"testing"
+	"time"
 )
 
-type DialerMock struct {
-	proxy.Dialer
-}
-
-func (mock DialerMock) Dial(network, addr string) (c net.Conn, err error) {
-	dialer := net.Dialer{}
-	return dialer.Dial(network, addr)
-}
-
-var question = dns.Question{Name: "ip.cn.", Qtype: dns.TypeA}
-var request, fakeRequest = &dns.Msg{}, &dns.Msg{}
-var fakeQuest = dns.Question{Name: "ip.cn", Qtype: dns.TypeA}
-var mockProxy = DialerMock{}
-var fakeProxy, _ = proxy.SOCKS5("tcp", "unknown", nil, proxy.Direct)
+var dialer, _ = proxy.SOCKS5("tcp", "", nil, proxy.Direct)
 
 func assertFail(t *testing.T, val *dns.Msg, err error) {
-	assert.NotEqual(t, err, nil)
-	assert.True(t, val == nil)
+	assert.Nil(t, val)
+	assert.NotNil(t, err)
 }
 func assertSuccess(t *testing.T, val *dns.Msg, err error) {
-	assert.Equal(t, err, nil)
-	assert.True(t, len(val.Answer) > 0)
+	assert.NotNil(t, val)
+	assert.Nil(t, err)
+}
+
+func MockFuncSeq(target interface{}, outputs []mock.Params) *mock.Patches {
+	var cells []mock.OutputCell
+	for _, output := range outputs {
+		cells = append(cells, mock.OutputCell{Values: output})
+	}
+	return mock.ApplyFuncSeq(target, cells)
+}
+
+func MockMethodSeq(target interface{}, methodName string, outputs []mock.Params) *mock.Patches {
+	var cells []mock.OutputCell
+	for _, output := range outputs {
+		cells = append(cells, mock.OutputCell{Values: output})
+	}
+	return mock.ApplyMethodSeq(reflect.TypeOf(target), methodName, cells)
 }
 
 func TestDNSCaller(t *testing.T) {
-	server := "1.1.1.1:53"
-	request.SetQuestion(question.Name, question.Qtype)
-	// 空初始化
-	caller := NewDNSCaller("", "udp", nil)
-	r, err := caller.Call(request)
-	assertFail(t, r, err)
-	// 无效dns地址
-	caller = NewDNSCaller(server+"ne", "udp", nil)
-	r, err = caller.Call(request)
-	assertFail(t, r, err)
-	// 正常请求
-	caller = NewDNSCaller(server, "udp", nil)
-	r, err = caller.Call(request)
-	assertSuccess(t, r, err)
-	// 无效请求
-	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
-	r, err = caller.Call(fakeRequest)
-	assertFail(t, r, err)
-	// 无效代理
-	caller = NewDNSCaller(server, "udp", fakeProxy)
-	r, err = caller.Call(request)
-	assertFail(t, r, err)
-	// Mock代理
-	caller = NewDNSCaller(server, "udp", mockProxy)
-	r, err = caller.Call(request)
-	assertSuccess(t, r, err)
-}
+	req := &dns.Msg{}
 
-func TestDohCaller(t *testing.T) {
-	address, serverName := "1.0.0.1:853", "cloudflare-dns.com"
-	// mock代理
-	caller := NewDoTCaller(address, serverName, mockProxy)
-	r, err := caller.Call(request)
+	caller := NewDNSCaller("", "", nil)
+	// 不使用代理，mock掉Exchange
+	p := MockMethodSeq(caller.client, "Exchange", []mock.Params{
+		{nil, time.Second, fmt.Errorf("err")},
+		{&dns.Msg{}, time.Second, nil},
+	})
+	// exchange调用失败
+	r, err := caller.Call(req)
+	assertFail(t, r, err)
+	// exchange调用成功
+	r, err = caller.Call(req)
+	assertSuccess(t, r, err)
+
+	caller = NewDoTCaller("", "", dialer)
+	// 使用代理，mock掉Dial、WriteMsg、ReadMsg
+	p1 := MockMethodSeq(caller.proxy, "Dial", []mock.Params{
+		{nil, fmt.Errorf("err")},
+		{&net.TCPConn{}, nil}, {&net.TCPConn{}, nil}, {&net.TCPConn{}, nil},
+	})
+	p2 := MockMethodSeq(caller.conn, "WriteMsg", []mock.Params{
+		{fmt.Errorf("err")}, {nil}, {nil},
+	})
+	p3 := MockMethodSeq(caller.conn, "ReadMsg", []mock.Params{
+		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
+	})
+	defer func() { p.Reset(); p1.Reset(); p2.Reset(); p3.Reset() }()
+	// Dial失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Dial成功，但WriteMsg失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Dial、WriteMsg成功，但ReadMsg失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Dial、WriteMsg、ReadMsg都成功
+	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
 }
 
 func TestDoHCaller(t *testing.T) {
-	url := "https://cloudflare-dns.com/dns-query"
-	// 无效服务器
-	request.SetQuestion(question.Name, question.Qtype)
-	caller := DoHCaller{Url: "https://not-exists.com/dns-query"}
-	r, err := caller.Call(request)
+	req := &dns.Msg{}
+	caller := NewDoHCaller("", dialer)
+
+	p1 := MockMethodSeq(req, "PackBuffer", []mock.Params{
+		{nil, fmt.Errorf("err")}, {[]byte{1}, nil},
+		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
+	})
+	p2 := MockMethodSeq(caller.client, "Post", []mock.Params{
+		{nil, fmt.Errorf("err")}, {&http.Response{Body: &net.TCPConn{}}, nil},
+		{&http.Response{Body: &net.TCPConn{}}, nil},
+		{&http.Response{Body: &net.TCPConn{}}, nil},
+	})
+	p3 := MockFuncSeq(ioutil.ReadAll, []mock.Params{
+		{nil, fmt.Errorf("err")}, {make([]byte, 1), nil},
+		{make([]byte, 12), nil},
+	})
+	defer func() { p1.Reset(); p2.Reset(); p3.Reset() }()
+
+	// Pack失败
+	r, err := caller.Call(req)
 	assertFail(t, r, err)
-	// 无效路径
-	caller = DoHCaller{Url: url + "/ne"}
-	r, err = caller.Call(request)
+	// Pack成功，但Post失败
+	r, err = caller.Call(req)
 	assertFail(t, r, err)
-	// 正常请求
-	caller = DoHCaller{Url: url}
-	r, err = caller.Call(request)
+	// Pack、Post成功，但ReadAll失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Pack、Post、ReadAll成功，但Unpack失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Pack、Post、ReadAll、Unpack成功
+	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
-	// 无效请求
-	fakeRequest.SetQuestion(fakeQuest.Name, fakeQuest.Qtype)
-	r, err = caller.Call(fakeRequest)
-	assertFail(t, r, err)
-	// 无效代理
-	caller = DoHCaller{Url: url, Dialer: fakeProxy}
-	r, err = caller.Call(request)
-	assertFail(t, r, err)
 }

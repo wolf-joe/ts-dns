@@ -139,7 +139,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
 		for _, addr := range groupConf.DoH { // dns over https服务器，格式为https://domain/dns-query
 			if dohReg.MatchString(addr) {
-				callers = append(callers, &outbound.DoHCaller{Url: addr, Dialer: dialer})
+				callers = append(callers, outbound.NewDoHCaller(addr, dialer))
 			}
 		}
 		group := &inbound.Group{Callers: callers}
