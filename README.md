@@ -93,9 +93,10 @@
 
 ## TODO
 
-* 配置文件自动重载
+* 完善单元测试
+* 并发请求上游DNS
+* 设置fallback DNS
 * 默认使用ECS转发DNS请求
-* DNS并发响应
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
