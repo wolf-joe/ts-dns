@@ -3,7 +3,6 @@ package outbound
 import (
 	"bytes"
 	"crypto/tls"
-	"fmt"
 	"github.com/miekg/dns"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
@@ -11,81 +10,51 @@ import (
 	"net/http"
 )
 
-var udpClient = dns.Client{Net: "udp"}
-var tcpClient = dns.Client{Net: "tcp"}
 var httpClient = http.Client{}
 
 type Caller interface {
 	Call(request *dns.Msg) (r *dns.Msg, err error)
 }
 
-func call(client dns.Client, request *dns.Msg, address string, dialer proxy.Dialer) (r *dns.Msg, err error) {
-	if request == nil || len(request.Question) <= 0 || address == "" {
-		return nil, fmt.Errorf("request or server address cannot be empty")
+type DNSCaller struct {
+	client *dns.Client
+	server string
+	proxy  proxy.Dialer
+}
+
+func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	if caller.proxy == nil { // 不使用代理，直接发送dns请求
+		r, _, err = caller.client.Exchange(request, caller.server)
+		return
 	}
+	// 通过代理连接代理服务器
 	var proxyConn net.Conn
-	// 返回前关闭代理连接
-	defer func() {
-		if proxyConn != nil {
-			_ = proxyConn.Close()
-		}
-	}()
-	if dialer == nil {
-		// 不使用代理
-		r, _, err = client.Exchange(request, address)
-		return r, err
-	}
-	// 使用代理连接DNS服务器
-	if proxyConn, err = dialer.Dial("tcp", address); err != nil {
+	if proxyConn, err = caller.proxy.Dial("tcp", caller.server); err != nil {
 		return nil, err
 	}
-	var conn *dns.Conn
-	if client.Net == "tcp" || client.Net == "udp" {
-		conn = &dns.Conn{Conn: proxyConn}
-	} else { // dns over tls
-		conn = &dns.Conn{Conn: tls.Client(proxyConn, client.TLSConfig)}
+	// 打包连接
+	conn := &dns.Conn{Conn: proxyConn}
+	if caller.client.TLSConfig != nil { // dns over tls
+		conn.Conn = tls.Client(proxyConn, caller.client.TLSConfig)
 	}
+	// 发送dns请求
 	if err = conn.WriteMsg(request); err != nil {
 		return nil, err
 	}
 	return conn.ReadMsg()
-
 }
 
-type UDPCaller struct {
-	Address string
-	Dialer  proxy.Dialer
+// 创建一个DNS Caller，需要服务器地址（ip+端口）、网络类型（udp、tcp），可选代理
+func NewDNSCaller(server, network string, proxy proxy.Dialer) *DNSCaller {
+	client := &dns.Client{Net: network}
+	caller := &DNSCaller{client: client, server: server, proxy: proxy}
+	return caller
 }
 
-func (caller *UDPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	return call(udpClient, request, caller.Address, caller.Dialer)
-}
-
-type TCPCaller struct {
-	Address string
-	Dialer  proxy.Dialer
-}
-
-func (caller *TCPCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	return call(tcpClient, request, caller.Address, caller.Dialer)
-}
-
-type TLSCaller struct {
-	address string
-	dialer  proxy.Dialer
-	client  dns.Client
-}
-
-func (caller *TLSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	return call(caller.client, request, caller.address, caller.dialer)
-}
-
-func NewTLSCaller(address string, dialer proxy.Dialer,
-	serverName string, skipVerify bool) *TLSCaller {
-	client := dns.Client{Net: "tcp-tls", TLSConfig: &tls.Config{
-		ServerName: serverName, InsecureSkipVerify: skipVerify,
-	}}
-	caller := &TLSCaller{address: address, dialer: dialer, client: client}
+// 创建一个DoT Caller，需要服务器地址（ip+端口）、证书名称，可选代理
+func NewDoTCaller(server, serverName string, proxy proxy.Dialer) *DNSCaller {
+	client := &dns.Client{Net: "tcp-tls", TLSConfig: &tls.Config{ServerName: serverName}}
+	caller := &DNSCaller{client: client, server: server, proxy: proxy}
 	return caller
 }
 

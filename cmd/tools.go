@@ -109,19 +109,15 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		// 为每个出站dns服务器创建对应Caller对象
 		var callers []outbound.Caller
 		for _, addr := range groupConf.DNS { // TCP/UDP服务器
-			useTcp := false
+			network := "udp"
 			if strings.HasSuffix(addr, "/tcp") {
-				addr, useTcp = addr[:len(addr)-4], true
+				addr, network = addr[:len(addr)-4], "tcp"
 			}
 			if addr != "" {
 				if !strings.Contains(addr, ":") {
 					addr += ":53"
 				}
-				if useTcp {
-					callers = append(callers, &outbound.TCPCaller{Address: addr, Dialer: dialer})
-				} else {
-					callers = append(callers, &outbound.UDPCaller{Address: addr, Dialer: dialer})
-				}
+				callers = append(callers, outbound.NewDNSCaller(addr, network, dialer))
 			}
 		}
 		for _, addr := range groupConf.DoT { // dns over tls服务器，格式为ip:port@serverName
@@ -136,7 +132,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 					addr += ":853"
 				}
 				if serverName != "" {
-					callers = append(callers, outbound.NewTLSCaller(addr, dialer, serverName, false))
+					callers = append(callers, outbound.NewDoTCaller(addr, serverName, dialer))
 				}
 			}
 		}
