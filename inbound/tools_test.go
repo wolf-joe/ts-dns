@@ -2,10 +2,11 @@ package inbound
 
 import (
 	"fmt"
-	mock "github.com/agiledragon/gomonkey"
+	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
+	"github.com/wolf-joe/ts-dns/mock"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"net"
 	"testing"
@@ -31,10 +32,11 @@ func TestTools(t *testing.T) {
 	assert.Nil(t, callDNS(group, req), nil)
 	group.Callers = append(group.Callers, &outbound.DNSCaller{})
 	// mock掉call的返回
-	p := MockMethodSeq(group.Callers[0], "Call", []mock.Params{
+	mocker := mock.NewMocker()
+	mocker.MethodSeq(group.Callers[0], "Call", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
 	})
 	assert.Nil(t, callDNS(group, req), nil)
 	assert.NotNil(t, callDNS(group, req), nil)
-	p.Reset()
+	mocker.Reset()
 }

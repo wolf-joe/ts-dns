@@ -2,22 +2,27 @@ package inbound
 
 import (
 	"fmt"
-	mock "github.com/agiledragon/gomonkey"
+	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
+	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
+	"github.com/wolf-joe/ts-dns/mock"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"net"
-	"reflect"
 	"sync"
 	"testing"
 )
 
-type MockResp struct{ dns.ResponseWriter }
+type MockResp struct {
+	dns.ResponseWriter
+	r *dns.Msg
+}
 
-func (r *MockResp) WriteMsg(_ *dns.Msg) error {
+func (r *MockResp) WriteMsg(resp *dns.Msg) error {
+	r.r = resp
 	return nil
 }
 
@@ -27,22 +32,6 @@ func (r *MockResp) Close() error {
 
 func (r *MockResp) RemoteAddr() net.Addr {
 	return &net.IPNet{}
-}
-
-func MockFuncSeq(target interface{}, outputs []mock.Params) *mock.Patches {
-	var cells []mock.OutputCell
-	for _, output := range outputs {
-		cells = append(cells, mock.OutputCell{Values: output})
-	}
-	return mock.ApplyFuncSeq(target, cells)
-}
-
-func MockMethodSeq(target interface{}, methodName string, outputs []mock.Params) *mock.Patches {
-	var cells []mock.OutputCell
-	for _, output := range outputs {
-		cells = append(cells, mock.OutputCell{Values: output})
-	}
-	return mock.ApplyMethodSeq(reflect.TypeOf(target), methodName, cells)
 }
 
 func TestHandler(t *testing.T) {
@@ -59,50 +48,53 @@ func TestHandler(t *testing.T) {
 	writer, req := &MockResp{}, &dns.Msg{}
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
+	mocker := mock.NewMocker()
 	// mock掉hosts
-	p := MockMethodSeq(handler.HostsReaders[0], "Record", []mock.Params{
-		{"error"}, {"ip.cn. 0 IN A 1.1.1.1"},
+	mocker.MethodSeq(handler.HostsReaders[0], "Record", []gomonkey.Params{
+		{"ip.cn 0 IN A ???"}, {"ip.cn. 0 IN A 1.1.1.1"},
 	})
 	handler.ServeDNS(writer, req) // 命中hosts且NewRR失败
+	assert.Nil(t, writer.r)
 	handler.ServeDNS(writer, req) // 命中hosts且NewRR成功
-	p.Reset()
+	assert.NotNil(t, writer.r)
+	mocker.Reset()
 	// mock掉cache
-	p = MockMethodSeq(handler.Cache, "Get", []mock.Params{{resp}})
+	mocker.MethodSeq(handler.Cache, "Get", []gomonkey.Params{{resp}})
 	handler.ServeDNS(writer, req) // 命中cache
-	p.Reset()
+	assert.NotNil(t, writer.r)
+	mocker.Reset()
 	// mock掉group的matcher、callDNS、addIPSet
-	p = MockMethodSeq(group.Matcher, "Match", []mock.Params{{true, true}})
-	pCall := MockFuncSeq(callDNS, []mock.Params{{resp}})
-	pAdd := MockFuncSeq(addIPSet, []mock.Params{{nil}})
+	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{{true, true}})
+	mocker.FuncSeq(callDNS, []gomonkey.Params{{resp}})
+	mocker.FuncSeq(addIPSet, []gomonkey.Params{{nil}})
 	handler.ServeDNS(writer, req) // 命中rules，调用callDNS后addIPSet
-	p.Reset()
-	pCall.Reset()
-	pAdd.Reset()
+	assert.NotNil(t, writer.r)
+	mocker.Reset()
 	// mock掉callDNS和extractIPv4、CN IP、addIPSet
-	var patches []*mock.Patches
-	patches = append(patches, MockFuncSeq(callDNS, []mock.Params{
+	mocker.FuncSeq(callDNS, []gomonkey.Params{
 		{resp}, {resp}, {resp}, {resp},
-	}))
-	patches = append(patches, MockFuncSeq(extractIPv4, []mock.Params{
+	})
+	mocker.FuncSeq(extractIPv4, []gomonkey.Params{
 		{[]string{"1.1.1.1"}}, {[]string{"1.1.1.1"}}, {[]string{"1.1.1.1"}},
-	}))
-	patches = append(patches, MockMethodSeq(handler.CNIP, "Contain",
-		[]mock.Params{{true}, {false}, {false}}))
-	patches = append(patches, MockFuncSeq(addIPSet, []mock.Params{
+	})
+	mocker.MethodSeq(handler.CNIP, "Contain", []gomonkey.Params{
+		{true}, {false}, {false},
+	})
+	mocker.FuncSeq(addIPSet, []gomonkey.Params{
 		{fmt.Errorf("err")}, {nil}, {nil},
-	}))
+	})
 	handler.ServeDNS(writer, req) // 都是cn ip
+	assert.NotNil(t, writer.r)
 	// mock掉matcher，包括两个rule matcher和gfw matcher，一次ServerDNS需要三个返回值
-	patches = append(patches, MockMethodSeq(group.Matcher, "Match", []mock.Params{
+	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{
 		{false, true}, {false, true}, {false, true},
 		{false, true}, {false, true}, {true, true},
-	}))
+	})
 	handler.ServeDNS(writer, req) // 存在非cn ip，且被gfw匹配
+	assert.NotNil(t, writer.r)
 	handler.ServeDNS(writer, req) // 存在非cn ip，且未被gfw匹配
+	assert.NotNil(t, writer.r)
 
-	for _, p := range patches {
-		p.Reset()
-	}
-
+	mocker.Reset()
 	handler.Refresh(handler)
 }
