@@ -147,10 +147,8 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		group.Matcher = matcher.NewABPByText(strings.Join(groupConf.Rules, "\n"))
 		// 读取IPSet配置
 		if groupConf.IPSetName != "" {
-			if groupConf.IPSetTTL > 0 {
-				group.IPSetTTL = groupConf.IPSetTTL
-			}
-			group.IPSet, err = ipset.New(groupConf.IPSetName, "hash:ip", &ipset.Params{})
+			param := &ipset.Params{Timeout: groupConf.IPSetTTL}
+			group.IPSet, err = ipset.New(groupConf.IPSetName, "hash:ip", param)
 			if err != nil {
 				log.Errorf("create ipset error: %v", err)
 				return nil, err

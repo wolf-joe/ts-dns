@@ -25,7 +25,7 @@ func addIPSet(group *Group, r *dns.Msg) (err error) {
 		return
 	}
 	for _, ip := range extractIPv4(r) {
-		err = group.IPSet.Add(ip, group.IPSetTTL)
+		err = group.IPSet.Add(ip, group.IPSet.Timeout)
 	}
 	return
 }

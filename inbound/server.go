@@ -13,14 +13,12 @@ import (
 )
 
 type Group struct {
-	Callers  []outbound.Caller
-	Matcher  *matcher.ABPlus
-	IPSet    *ipset.IPSet
-	IPSetTTL int
+	Callers []outbound.Caller
+	Matcher *matcher.ABPlus
+	IPSet   *ipset.IPSet
 }
 
 type Handler struct {
-	dns.Handler
 	Mux          *sync.RWMutex
 	Listen       string
 	Cache        *cache.DNSCache
