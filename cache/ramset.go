@@ -46,7 +46,7 @@ func NewRamSetByText(text string) (s *RamSet) {
 }
 
 // 用文件内容初始化一个RamSet，每行一个ip/网段
-func NewRamSetByFn(filename string) (matcher *RamSet, err error) {
+func NewRamSetByFile(filename string) (matcher *RamSet, err error) {
 	if raw, err := ioutil.ReadFile(filename); err != nil {
 		return nil, err
 	} else {

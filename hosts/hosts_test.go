@@ -11,7 +11,7 @@ import (
 func TestNewTextReader(t *testing.T) {
 	content := "# comment\n\n 256.0.0.0 ne\n" +
 		" 127.0.0.1 localhost \n \n gggg::0 ip6-ne \n ::1 ip6-localhost "
-	reader := NewTextReader(content)
+	reader := NewReaderByText(content)
 	assert.Equal(t, reader.IP("ne", false), "")
 	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
 	assert.Equal(t, reader.IP("ip6-ne", true), "")
@@ -25,14 +25,14 @@ func TestNewTextReader(t *testing.T) {
 
 func TestNewFileReader(t *testing.T) {
 	filename := "go_test_hosts_file"
-	reader, err := NewFileReader(filename, 0)
+	reader, err := NewReaderByFile(filename, 0)
 	assert.True(t, reader == nil)
 	assert.NotEqual(t, err, nil)
 
 	// 写入测试文件
 	content := "127.0.0.1 localhost\n::1 ip6-localhost"
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
-	reader, err = NewFileReader(filename, time.Second)
+	reader, err = NewReaderByFile(filename, time.Second)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
 	assert.Equal(t, reader.IP("ip6-localhost", true), "::1")

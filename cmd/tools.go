@@ -78,7 +78,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		return nil, err
 	}
 	// 读取cnip
-	if h.CNIP, err = cache.NewRamSetByFn(config.CNIP); err != nil {
+	if h.CNIP, err = cache.NewRamSetByFile(config.CNIP); err != nil {
 		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
 		return nil, err
 	}
@@ -89,11 +89,11 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 	}
 	if len(lines) > 0 {
 		text := strings.Join(lines, "\n")
-		h.HostsReaders = append(h.HostsReaders, hosts.NewTextReader(text))
+		h.HostsReaders = append(h.HostsReaders, hosts.NewReaderByText(text))
 	}
 	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range config.HostsFiles {
-		if reader, err := hosts.NewFileReader(filename, 0); err != nil {
+		if reader, err := hosts.NewReaderByFile(filename, 0); err != nil {
 			log.WithField("file", filename).Warnf("read hosts error: %v", err)
 		} else {
 			h.HostsReaders = append(h.HostsReaders, reader)

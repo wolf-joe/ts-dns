@@ -46,7 +46,7 @@ func (r *TextReader) Record(hostname string, ipv6 bool) (record string) {
 }
 
 // 解析文本内容中的Hosts
-func NewTextReader(text string) (r *TextReader) {
+func NewReaderByText(text string) (r *TextReader) {
 	r = &TextReader{v4Map: map[string]string{}, v6Map: map[string]string{}}
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.Trim(line, " \t\r")
@@ -81,7 +81,7 @@ func (r *FileReader) reload() {
 		return
 	}
 	// read host file again
-	nr, err := NewFileReader(r.filename, r.reloadTick)
+	nr, err := NewReaderByFile(r.filename, r.reloadTick)
 	// 当hosts文件读取失败时不更新内存中已有hosts记录
 	if err == nil {
 		r.reader = nr.reader
@@ -102,7 +102,7 @@ func (r *FileReader) Record(hostname string, ipv6 bool) string {
 }
 
 // 解析目标文件内容中的Hosts
-func NewFileReader(filename string, reloadTick time.Duration) (r *FileReader, err error) {
+func NewReaderByFile(filename string, reloadTick time.Duration) (r *FileReader, err error) {
 	if reloadTick < MinReloadTick {
 		reloadTick = MinReloadTick
 	}
@@ -111,7 +111,7 @@ func NewFileReader(filename string, reloadTick time.Duration) (r *FileReader, er
 		return
 	}
 	r = &FileReader{mux: new(sync.Mutex), filename: filename, reloadTick: reloadTick}
-	r.reader = NewTextReader(string(raw))
+	r.reader = NewReaderByText(string(raw))
 	r.timestamp = time.Now()
 	return
 }

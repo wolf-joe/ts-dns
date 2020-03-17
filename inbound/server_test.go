@@ -49,7 +49,7 @@ func TestHandler(t *testing.T) {
 	// 初始化handler
 	handler := &Handler{Mux: new(sync.RWMutex), Cache: cache.NewDNSCache(0, 0, 0),
 		GFWMatcher: matcher.NewABPByText(""), CNIP: cache.NewRamSetByText(""),
-		HostsReaders: []hosts.Reader{hosts.NewTextReader("")},
+		HostsReaders: []hosts.Reader{hosts.NewReaderByText("")},
 	}
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}

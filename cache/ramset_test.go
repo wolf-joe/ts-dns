@@ -13,10 +13,10 @@ func TestRamSet(t *testing.T) {
 	filename := "go_test_ips_file"
 	err := ioutil.WriteFile(filename, []byte(text), 0644)
 	// 读取失败
-	matcher, err := NewRamSetByFn(filename + "_ne")
+	matcher, err := NewRamSetByFile(filename + "_ne")
 	assert.True(t, err != nil)
 	// 读取成功
-	matcher, err = NewRamSetByFn(filename)
+	matcher, err = NewRamSetByFile(filename)
 	assert.True(t, matcher != nil)
 	assert.True(t, err == nil)
 	if matcher != nil {
