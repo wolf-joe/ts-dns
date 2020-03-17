@@ -32,6 +32,9 @@ func addIPSet(group *Group, r *dns.Msg) (err error) {
 
 // 依次向目标组内的dns服务器转发请求，获得响应则返回
 func callDNS(group *Group, request *dns.Msg) (r *dns.Msg) {
+	if group == nil || len(group.Callers) == 0 || request == nil {
+		return nil
+	}
 	var err error
 	for _, caller := range group.Callers { // 遍历DNS服务器
 		r, err = caller.Call(request) // 发送查询请求
