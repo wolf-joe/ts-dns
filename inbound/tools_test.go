@@ -8,17 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"net"
-	"reflect"
 	"testing"
 )
-
-func MockMethodSeq(target interface{}, methodName string, outputs []mock.Params) *mock.Patches {
-	var cells []mock.OutputCell
-	for _, output := range outputs {
-		cells = append(cells, mock.OutputCell{Values: output})
-	}
-	return mock.ApplyMethodSeq(reflect.TypeOf(target), methodName, cells)
-}
 
 func TestTools(t *testing.T) {
 	assert.Equal(t, len(extractIPv4(nil)), 0)
