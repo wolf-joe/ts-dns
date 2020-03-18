@@ -117,9 +117,14 @@ func TestGroup(t *testing.T) {
 	assert.Nil(t, group.CallDNS(nil))
 	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
+		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
 	})
 	assert.Nil(t, group.CallDNS(&dns.Msg{}))    // Call返回error
 	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // Call正常返回
+	// 测试并发CallDNS
+	group.Callers = append(group.Callers, &outbound.DNSCaller{})
+	group.Concurrent = true
+	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // 并发调用两个DNSCaller
 	// 测试AddIPSet
 	group.AddIPSet(nil)
 	mocker.MethodSeq(group.IPSet, "Add", []gomonkey.Params{

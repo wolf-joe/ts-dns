@@ -13,24 +13,42 @@ import (
 
 // Group 各域名组相关配置
 type Group struct {
-	Callers []outbound.Caller
-	Matcher *matcher.ABPlus
-	IPSet   *ipset.IPSet
+	Callers    []outbound.Caller
+	Matcher    *matcher.ABPlus
+	IPSet      *ipset.IPSet
+	Concurrent bool
 }
 
 // CallDNS 依次向组内的dns服务器转发请求，获得非nil响应则返回
-func (group *Group) CallDNS(request *dns.Msg) (r *dns.Msg) {
+func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
-	var err error
-	for _, caller := range group.Callers { // 遍历DNS服务器
-		r, err = caller.Call(request) // 发送查询请求
+	// 并发用的channel
+	ch := make(chan *dns.Msg, len(group.Callers))
+	// 包裹Caller.Call，方便实现并发
+	call := func(caller outbound.Caller, request *dns.Msg) *dns.Msg {
+		r, err := caller.Call(request)
 		if err != nil {
 			log.Errorf("query dns error: %v", err)
 		}
-		if r != nil {
-			return
+		ch <- r
+		return r
+	}
+	// 遍历DNS服务器
+	for _, caller := range group.Callers {
+		if group.Concurrent {
+			go call(caller, request)
+		} else if r := call(caller, request); r != nil {
+			return r
+		}
+	}
+	// 并发情况下依次提取channel中的返回值
+	if group.Concurrent {
+		for r := range ch {
+			if r != nil {
+				return r
+			}
 		}
 	}
 	return nil
