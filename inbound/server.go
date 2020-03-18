@@ -146,7 +146,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	// 先用clean组dns解析
 	fields["group"], group = "clean", handler.GroupMap["clean"]
 	r = group.CallDNS(request)
-	if allInCN(r, handler.CNIP) {
+	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
 		log.WithFields(fields).Infof("cn/empty ipv4")
 	} else if blocked, ok := handler.GFWMatcher.Match(question.Name); !ok || !blocked {

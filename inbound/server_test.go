@@ -91,8 +91,8 @@ func TestHandler(t *testing.T) {
 	assert.Equal(t, writer.r, resp)
 
 	// 测试ServeDNS后半部分：CN IP+GFWList
-	// mock allInCN
-	mocker.FuncSeq(allInCN, []gomonkey.Params{
+	// mock allInRange
+	mocker.FuncSeq(allInRange, []gomonkey.Params{
 		{true}, {false}, {false},
 	})
 	handler.ServeDNS(writer, req) // 未出现非cn ip，直接返回
