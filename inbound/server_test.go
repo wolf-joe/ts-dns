@@ -16,21 +16,21 @@ import (
 	"testing"
 )
 
-type MockResp struct {
+type MockRespWriter struct {
 	dns.ResponseWriter
 	r *dns.Msg
 }
 
-func (r *MockResp) WriteMsg(resp *dns.Msg) error {
+func (r *MockRespWriter) WriteMsg(resp *dns.Msg) error {
 	r.r = resp
 	return nil
 }
 
-func (r *MockResp) Close() error {
+func (r *MockRespWriter) Close() error {
 	return nil
 }
 
-func (r *MockResp) RemoteAddr() net.Addr {
+func (r *MockRespWriter) RemoteAddr() net.Addr {
 	return &net.IPNet{}
 }
 
@@ -45,56 +45,87 @@ func TestHandler(t *testing.T) {
 	handler.GroupMap = map[string]*Group{"clean": group, "dirty": group}
 	// 初始化所需参数和返回值
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.ParseIP("1.1.1.1")}}}
-	writer, req := &MockResp{}, &dns.Msg{}
+	writer, req := &MockRespWriter{}, &dns.Msg{}
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
 	mocker := mock.NewMocker()
-	// mock掉hosts
+	defer mocker.Reset()
+
+	// 测试HitHosts
 	mocker.MethodSeq(handler.HostsReaders[0], "Record", []gomonkey.Params{
-		{"ip.cn 0 IN A ???"}, {"ip.cn. 0 IN A 1.1.1.1"},
+		{""}, {""}, {"ip.cn 0 IN A ???"}, {"ip.cn 0 IN A 1.1.1.1"},
 	})
-	handler.ServeDNS(writer, req) // 命中hosts且NewRR失败
-	assert.Nil(t, writer.r)
-	handler.ServeDNS(writer, req) // 命中hosts且NewRR成功
-	assert.NotNil(t, writer.r)
-	mocker.Reset()
-	// mock掉cache
-	mocker.MethodSeq(handler.Cache, "Get", []gomonkey.Params{{resp}})
-	handler.ServeDNS(writer, req) // 命中cache
-	assert.NotNil(t, writer.r)
-	mocker.Reset()
-	// mock掉group的matcher、callDNS、addIPSet
-	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{{true, true}})
-	mocker.FuncSeq(callDNS, []gomonkey.Params{{resp}})
-	mocker.FuncSeq(addIPSet, []gomonkey.Params{{nil}})
-	handler.ServeDNS(writer, req) // 命中rules，调用callDNS后addIPSet
-	assert.NotNil(t, writer.r)
-	mocker.Reset()
-	// mock掉callDNS和extractIPv4、CN IP、addIPSet
-	mocker.FuncSeq(callDNS, []gomonkey.Params{
+	assert.Nil(t, handler.HitHosts(req))    // Record返回空串（需要两个返回值）
+	assert.Nil(t, handler.HitHosts(req))    // Record返回值格式不正确
+	assert.NotNil(t, handler.HitHosts(req)) // Record返回值正常
+
+	// 测试ServeDNS前半部分
+	// mock HitHosts
+	mocker.MethodSeq(handler, "HitHosts", []gomonkey.Params{
+		{resp}, {nil}, {nil}, // 前半部分用
+		{nil}, {nil}, {nil},
+	})
+	handler.ServeDNS(writer, req) // 命中hosts
+	assert.Equal(t, writer.r, resp)
+	// mock缓存
+	mocker.MethodSeq(handler.Cache, "Get", []gomonkey.Params{
+		{resp}, {nil}, // 前半部分用
+		{nil}, {nil}, {nil},
+	})
+	handler.ServeDNS(writer, req) // 命中缓存
+	assert.Equal(t, writer.r, resp)
+	// mock 规则匹配结果
+	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{
+		{true, true}, // 前半部分用，只包含一次匹配
+		// 后半部分需要两个不匹配跳过规则（可能要再加上GFWList的匹配/不匹配）
+		{false, false}, {false, false},
+		{false, false}, {false, false}, {false, false},
+		{false, false}, {false, false}, {true, true},
+	})
+	// 规则匹配后mock CallDNS
+	mocker.MethodSeq(group, "CallDNS", []gomonkey.Params{
+		{resp}, // 前半部分用
 		{resp}, {resp}, {resp}, {resp},
 	})
-	mocker.FuncSeq(extractIPv4, []gomonkey.Params{
-		{[]string{"1.1.1.1"}}, {[]string{"1.1.1.1"}}, {[]string{"1.1.1.1"}},
-	})
-	mocker.MethodSeq(handler.CNIP, "Contain", []gomonkey.Params{
+	handler.ServeDNS(writer, req) // 命中规则
+	assert.Equal(t, writer.r, resp)
+
+	// 测试ServeDNS后半部分：CN IP+GFWList
+	// mock allInCN
+	mocker.FuncSeq(allInCN, []gomonkey.Params{
 		{true}, {false}, {false},
 	})
-	mocker.FuncSeq(addIPSet, []gomonkey.Params{
-		{fmt.Errorf("err")}, {nil}, {nil},
-	})
-	handler.ServeDNS(writer, req) // 都是cn ip
-	assert.NotNil(t, writer.r)
-	// mock掉matcher，包括两个rule matcher和gfw matcher，一次ServerDNS需要三个返回值
-	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{
-		{false, true}, {false, true}, {false, true},
-		{false, true}, {false, true}, {true, true},
-	})
-	handler.ServeDNS(writer, req) // 存在非cn ip，且被gfw匹配
-	assert.NotNil(t, writer.r)
-	handler.ServeDNS(writer, req) // 存在非cn ip，且未被gfw匹配
-	assert.NotNil(t, writer.r)
+	handler.ServeDNS(writer, req) // 未出现非cn ip，直接返回
+	assert.Equal(t, writer.r, resp)
+	handler.ServeDNS(writer, req) // 出现非cn ip但不匹配GFWList，直接返回
+	assert.Equal(t, writer.r, resp)
+	handler.ServeDNS(writer, req) // 出现非cn ip且匹配GFWList，调dirty组CallDNS并返回
+	assert.Equal(t, writer.r, resp)
 
-	mocker.Reset()
+	// 测试Refresh
 	handler.Refresh(handler)
+}
+
+func TestGroup(t *testing.T) {
+	callers := []outbound.Caller{&outbound.DNSCaller{}}
+	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
+
+	mocker := mock.NewMocker()
+	defer mocker.Reset()
+
+	// 测试CallDNS
+	assert.Nil(t, group.CallDNS(nil))
+	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
+	})
+	assert.Nil(t, group.CallDNS(&dns.Msg{}))    // Call返回error
+	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // Call正常返回
+	// 测试AddIPSet
+	group.AddIPSet(nil)
+	mocker.MethodSeq(group.IPSet, "Add", []gomonkey.Params{
+		{fmt.Errorf("err")}, {nil},
+	})
+	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
+	group.AddIPSet(resp) // Add返回error
+	group.AddIPSet(resp) // Add正常返回
 }

@@ -1,42 +1,16 @@
 package inbound
 
 import (
-	"fmt"
-	"github.com/agiledragon/gomonkey"
-	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	"github.com/wolf-joe/ts-dns/mock"
-	"github.com/wolf-joe/ts-dns/outbound"
+	"github.com/wolf-joe/ts-dns/cache"
 	"net"
 	"testing"
 )
 
 func TestTools(t *testing.T) {
-	assert.Equal(t, len(extractIPv4(nil)), 0)
-	resp := &dns.Msg{}
-	assert.Equal(t, len(extractIPv4(resp)), 0)
-	resp.Answer = append(resp.Answer, &dns.AAAA{AAAA: net.ParseIP("::1")})
-	assert.Equal(t, len(extractIPv4(resp)), 0)
-	resp.Answer = append(resp.Answer, &dns.A{A: net.ParseIP("127.0.0.1")})
-	assert.Equal(t, len(extractIPv4(resp)), 1)
-
-	assert.Nil(t, addIPSet(nil, resp), nil)
-	group := &Group{}
-	assert.Nil(t, addIPSet(group, resp), nil)
-	group.IPSet = &ipset.IPSet{}
-	assert.NotNil(t, addIPSet(group, resp), nil)
-
-	req := &dns.Msg{}
-	assert.Nil(t, callDNS(nil, nil), nil)
-	assert.Nil(t, callDNS(group, req), nil)
-	group.Callers = append(group.Callers, &outbound.DNSCaller{})
-	// mock掉call的返回
-	mocker := mock.NewMocker()
-	mocker.MethodSeq(group.Callers[0], "Call", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
-	})
-	assert.Nil(t, callDNS(group, req), nil)
-	assert.NotNil(t, callDNS(group, req), nil)
-	mocker.Reset()
+	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
+	assert.Equal(t, len(extractA(nil)), 0)
+	assert.False(t, allInCN(resp, cache.NewRamSetByText("")))
+	assert.True(t, allInCN(resp, cache.NewRamSetByText("1.1.1.1")))
 }

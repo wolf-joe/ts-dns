@@ -8,16 +8,48 @@ import (
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
-	"net"
 	"sync"
 )
 
+// Group 各域名组相关配置
 type Group struct {
 	Callers []outbound.Caller
 	Matcher *matcher.ABPlus
 	IPSet   *ipset.IPSet
 }
 
+// CallDNS 依次向组内的dns服务器转发请求，获得非nil响应则返回
+func (group *Group) CallDNS(request *dns.Msg) (r *dns.Msg) {
+	if len(group.Callers) == 0 || request == nil {
+		return nil
+	}
+	var err error
+	for _, caller := range group.Callers { // 遍历DNS服务器
+		r, err = caller.Call(request) // 发送查询请求
+		if err != nil {
+			log.Errorf("query dns error: %v", err)
+		}
+		if r != nil {
+			return
+		}
+	}
+	return nil
+}
+
+// AddIPSet 将dns响应中所有的ipv4地址加入group指定的ipset
+func (group *Group) AddIPSet(r *dns.Msg) {
+	if group.IPSet == nil || r == nil {
+		return
+	}
+	for _, ip := range extractA(r) {
+		if err := group.IPSet.Add(ip, group.IPSet.Timeout); err != nil {
+			log.Errorf("add ipset error: %v", err)
+		}
+	}
+	return
+}
+
+// Handler 存储主要配置的dns请求处理器，程序核心
 type Handler struct {
 	Mux          *sync.RWMutex
 	Listen       string
@@ -28,25 +60,9 @@ type Handler struct {
 	GroupMap     map[string]*Group
 }
 
-func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
-	handler.Mux.RLock() // 申请读锁，持续整个请求
-	var r *dns.Msg
-	var group *Group
-	defer func() {
-		if r != nil { // 写入响应
-			r.SetReply(request)
-			_ = resp.WriteMsg(r)
-			if err := addIPSet(group, r); err != nil { // 写入ipset
-				log.Errorf("add ipset error: %v", err)
-			}
-		}
-		handler.Mux.RUnlock() // 读锁解除
-		_ = resp.Close()      // 结束连接
-	}()
-
+// HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
+func (handler *Handler) HitHosts(request *dns.Msg) *dns.Msg {
 	question := request.Question[0]
-	fields := log.Fields{"domain": question.Name, "src": resp.RemoteAddr()}
-	// 判断域名是否存在于hosts内
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
 		for _, reader := range handler.HostsReaders {
@@ -57,18 +73,43 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			}
 			if record != "" {
 				if ret, err := dns.NewRR(record); err != nil {
-					log.Printf("[ERROR] make DNS.RR error: %v\n", err)
+					log.Errorf("make DNS.RR error: %v", err)
 				} else {
-					r = new(dns.Msg)
+					r := new(dns.Msg)
 					r.Answer = append(r.Answer, ret)
+					return r
 				}
-				log.WithFields(fields).Infof("hit hosts")
-				return
 			}
 		}
 	}
+	return nil
+}
 
-	// 检测dns缓存是否命中
+// ServeDNS 处理dns请求，程序核心函数
+func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
+	handler.Mux.RLock() // 申请读锁，持续整个请求
+	var r *dns.Msg
+	var group *Group
+	defer func() {
+		if r != nil {
+			r.SetReply(request) // 写入响应
+			_ = resp.WriteMsg(r)
+		}
+		if group != nil {
+			group.AddIPSet(r) // 写入IPSet
+		}
+		handler.Mux.RUnlock() // 读锁解除
+		_ = resp.Close()      // 结束连接
+	}()
+
+	question := request.Question[0]
+	fields := log.Fields{"domain": question.Name, "src": resp.RemoteAddr()}
+	// 检测是否命中hosts
+	if r = handler.HitHosts(request); r != nil {
+		log.WithFields(fields).Infof("hit hosts")
+		return
+	}
+	// 检测是否命中dns缓存
 	if r = handler.Cache.Get(request); r != nil {
 		log.WithFields(fields).Infof("hit cache")
 		return
@@ -80,42 +121,30 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
 			fields["group"] = name
 			log.WithFields(fields).Infof("match by rules")
-			r = callDNS(group, request)
+			r = group.CallDNS(request)
 			return
 		}
 	}
-
-	// 先假设域名属于clean组
-	group = handler.GroupMap["clean"]
-	r = callDNS(group, request)
-	// 判断响应的ipv4中是否都为中国ip
-	var allInCN = true
-	for _, ip := range extractIPv4(r) {
-		if !handler.CNIP.Contain(net.ParseIP(ip)) {
-			allInCN = false
-			break
-		}
-	}
-	if allInCN {
-		fields["group"] = "clean"
+	// 先用clean组dns解析
+	fields["group"], group = "clean", handler.GroupMap["clean"]
+	r = group.CallDNS(request)
+	if allInCN(r, handler.CNIP) {
+		// 未出现非cn ip，流程结束
 		log.WithFields(fields).Infof("cn/empty ipv4")
+	} else if blocked, ok := handler.GFWMatcher.Match(question.Name); !ok || !blocked {
+		// 出现非cn ip但域名不匹配gfwlist，流程结束
+		log.WithFields(fields).Infof("not match gfwlist")
 	} else {
-		// 出现非中国ip，根据gfwlist再次判断
-		if blocked, ok := handler.GFWMatcher.Match(question.Name); ok && blocked {
-			fields["group"] = "dirty"
-			log.WithFields(fields).Infof("match gfwlist")
-			group = handler.GroupMap["dirty"] // 判断域名属于dirty组
-			r = callDNS(group, request)
-		} else {
-			fields["group"] = "clean"
-			log.WithFields(fields).Infof("not match gfwlist")
-		}
+		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
+		fields["group"], group = "dirty", handler.GroupMap["dirty"]
+		log.WithFields(fields).Infof("match gfwlist")
+		r = group.CallDNS(request)
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)
 }
 
-// 刷新配置，复制newHandler中除Mux、Listen之外的值
+// Refresh 刷新配置，复制newHandler中除Mux、Listen之外的值
 func (handler *Handler) Refresh(newHandler *Handler) {
 	handler.Mux.Lock()
 	defer handler.Mux.Unlock()
