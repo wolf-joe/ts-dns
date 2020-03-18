@@ -48,8 +48,8 @@ func (group *Group) CallDNS(request *dns.Msg, ipRange *cache.RamSet) *dns.Msg {
 	}
 	// 并发情况下依次提取channel中的返回值
 	if group.Concurrent {
-		for r := range ch {
-			if r != nil {
+		for i := 0; i < len(group.Callers); i++ {
+			if r := <-ch; r != nil {
 				return r
 			}
 		}
