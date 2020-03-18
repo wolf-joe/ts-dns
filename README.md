@@ -12,6 +12,7 @@
 
 * 默认基于`CN IP列表` + `GFWList`进行域名分组；
 * 支持DNS over UDP/TCP/TLS/HTTP；
+* 支持并发请求上游DNS；
 * 支持通过socks5代理转发DNS请求；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；
@@ -50,6 +51,7 @@
   [groups]
     [groups.clean]
     dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
+    concurrent = true
 
     [groups.dirty]
     dns = [""]  # 省略
@@ -94,9 +96,8 @@
 ## TODO
 
 * 完善单元测试
-* 并发请求上游DNS
 * 设置fallback DNS
-* 默认使用ECS转发DNS请求
+* 使用ECS转发DNS请求
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)

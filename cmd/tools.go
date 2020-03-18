@@ -144,6 +144,9 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 			}
 		}
 		group := &inbound.Group{Callers: callers, Concurrent: groupConf.Concurrent}
+		if group.Concurrent {
+			log.Warnln("enable dns concurrent in group " + groupName)
+		}
 		// 读取匹配规则
 		group.Matcher = matcher.NewABPByText(strings.Join(groupConf.Rules, "\n"))
 		// 读取IPSet配置
