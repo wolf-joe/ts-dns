@@ -115,19 +115,18 @@ func TestGroup(t *testing.T) {
 
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
 	// 测试CallDNS
-	assert.Nil(t, group.CallDNS(nil, nil))
+	assert.Nil(t, group.CallDNS(nil))
 	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {resp, nil}, {resp, nil},
+		{nil, fmt.Errorf("err")}, {resp, nil},
 		{nil, fmt.Errorf("err")}, {resp, nil},
 	})
-	assert.Nil(t, group.CallDNS(&dns.Msg{}, nil))                       // Call返回error
-	assert.NotNil(t, group.CallDNS(&dns.Msg{}, nil))                    // Call正常返回
-	assert.Nil(t, group.CallDNS(&dns.Msg{}, cache.NewRamSetByText(""))) // Call正常返回但不符合ipRange
+	assert.Nil(t, group.CallDNS(&dns.Msg{}))    // Call返回error
+	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // Call正常返回
 	// 测试并发CallDNS。两个Caller的并发在单测（-race）时会和mock冲突，这里就不测了
 	//group.Callers = append(group.Callers, &outbound.DNSCaller{})
 	group.Concurrent = true
-	assert.Nil(t, group.CallDNS(&dns.Msg{}, nil))
-	assert.NotNil(t, group.CallDNS(&dns.Msg{}, nil))
+	assert.Nil(t, group.CallDNS(&dns.Msg{}))
+	assert.NotNil(t, group.CallDNS(&dns.Msg{}))
 	// 测试AddIPSet
 	group.AddIPSet(nil)
 	mocker.MethodSeq(group.IPSet, "Add", []gomonkey.Params{
