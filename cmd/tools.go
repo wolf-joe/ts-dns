@@ -29,13 +29,14 @@ type tomlStruct struct {
 }
 
 type groupStruct struct {
-	Socks5    string
-	IPSetName string `toml:"ipset"`
-	IPSetTTL  int    `toml:"ipset_ttl"`
-	DNS       []string
-	DoT       []string
-	DoH       []string
-	Rules     []string
+	Socks5     string
+	IPSetName  string `toml:"ipset"`
+	IPSetTTL   int    `toml:"ipset_ttl"`
+	DNS        []string
+	DoT        []string
+	DoH        []string
+	Concurrent bool
+	Rules      []string
 }
 
 type cacheStruct struct {
@@ -142,7 +143,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 				callers = append(callers, outbound.NewDoHCaller(addr, dialer))
 			}
 		}
-		group := &inbound.Group{Callers: callers}
+		group := &inbound.Group{Callers: callers, Concurrent: groupConf.Concurrent}
 		// 读取匹配规则
 		group.Matcher = matcher.NewABPByText(strings.Join(groupConf.Rules, "\n"))
 		// 读取IPSet配置
