@@ -113,24 +113,25 @@ func TestGroup(t *testing.T) {
 	mocker := mock.NewMocker()
 	defer mocker.Reset()
 
+	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
 	// 测试CallDNS
-	assert.Nil(t, group.CallDNS(nil))
+	assert.Nil(t, group.CallDNS(nil, nil))
 	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
-		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
+		{nil, fmt.Errorf("err")}, {resp, nil}, {resp, nil},
+		{nil, fmt.Errorf("err")}, {resp, nil},
 	})
-	assert.Nil(t, group.CallDNS(&dns.Msg{}))    // Call返回error
-	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // Call正常返回
+	assert.Nil(t, group.CallDNS(&dns.Msg{}, nil))                       // Call返回error
+	assert.NotNil(t, group.CallDNS(&dns.Msg{}, nil))                    // Call正常返回
+	assert.Nil(t, group.CallDNS(&dns.Msg{}, cache.NewRamSetByText(""))) // Call正常返回但不符合ipRange
 	// 测试并发CallDNS
 	group.Callers = append(group.Callers, &outbound.DNSCaller{})
 	group.Concurrent = true
-	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // 并发调用两个DNSCaller
+	assert.NotNil(t, group.CallDNS(&dns.Msg{}, nil)) // 并发调用两个DNSCaller
 	// 测试AddIPSet
 	group.AddIPSet(nil)
 	mocker.MethodSeq(group.IPSet, "Add", []gomonkey.Params{
 		{fmt.Errorf("err")}, {nil},
 	})
-	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
 	group.AddIPSet(resp) // Add返回error
 	group.AddIPSet(resp) // Add正常返回
 }

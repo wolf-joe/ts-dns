@@ -20,7 +20,8 @@ type Group struct {
 }
 
 // CallDNS 依次向组内的dns服务器转发请求，获得非nil响应则返回
-func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
+// 如指定ipRange、且dns响应中出现非ipRange范围内的ipv4地址，则视该响应无效
+func (group *Group) CallDNS(request *dns.Msg, ipRange *cache.RamSet) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
@@ -31,6 +32,8 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 		r, err := caller.Call(request)
 		if err != nil {
 			log.Errorf("query dns error: %v", err)
+		} else if r != nil && ipRange != nil && !allInRange(r, ipRange) {
+			r = nil
 		}
 		ch <- r
 		return r
@@ -139,13 +142,13 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
 			fields["group"] = name
 			log.WithFields(fields).Infof("match by rules")
-			r = group.CallDNS(request)
+			r = group.CallDNS(request, nil)
 			return
 		}
 	}
 	// 先用clean组dns解析
 	fields["group"], group = "clean", handler.GroupMap["clean"]
-	r = group.CallDNS(request)
+	r = group.CallDNS(request, handler.CNIP)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
 		log.WithFields(fields).Infof("cn/empty ipv4")
@@ -156,7 +159,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
 		fields["group"], group = "dirty", handler.GroupMap["dirty"]
 		log.WithFields(fields).Infof("match gfwlist")
-		r = group.CallDNS(request)
+		r = group.CallDNS(request, nil)
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)
