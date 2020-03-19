@@ -20,18 +20,18 @@ import (
 
 type tomlStruct struct {
 	Listen     string
-	GFWList    string   `toml:"gfwlist"`
-	CNIP       string   `toml:"cnip"`
+	GFWList    string
+	CNIP       string
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
 	Cache      cacheStruct
-	GroupMap   map[string]groupStruct `toml:"groups"`
+	Groups     map[string]groupStruct
 }
 
 type groupStruct struct {
 	Socks5     string
-	IPSetName  string `toml:"ipset"`
-	IPSetTTL   int    `toml:"ipset_ttl"`
+	IPSet      string
+	IPSetTTL   int `toml:"ipset_ttl"`
 	DNS        []string
 	DoT        []string
 	DoH        []string
@@ -72,7 +72,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		config.Cache.MaxTTL = 86400
 	}
 
-	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, GroupMap: map[string]*inbound.Group{}}
+	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, Groups: map[string]*inbound.Group{}}
 	// 读取gfwlist
 	if h.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
@@ -101,7 +101,7 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		}
 	}
 	// 读取每个域名组的配置信息
-	for groupName, groupConf := range config.GroupMap {
+	for groupName, groupConf := range config.Groups {
 		// 读取socks5代理地址
 		var dialer proxy.Dialer
 		if groupConf.Socks5 != "" {
@@ -150,22 +150,22 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		// 读取匹配规则
 		group.Matcher = matcher.NewABPByText(strings.Join(groupConf.Rules, "\n"))
 		// 读取IPSet配置
-		if groupConf.IPSetName != "" {
+		if groupConf.IPSet != "" {
 			param := &ipset.Params{Timeout: groupConf.IPSetTTL}
-			group.IPSet, err = ipset.New(groupConf.IPSetName, "hash:ip", param)
+			group.IPSet, err = ipset.New(groupConf.IPSet, "hash:ip", param)
 			if err != nil {
 				log.Errorf("create ipset error: %v", err)
 				return nil, err
 			}
 		}
-		h.GroupMap[groupName] = group
+		h.Groups[groupName] = group
 	}
 	// 读取cache配置
 	minTTL := time.Duration(config.Cache.MinTTL) * time.Second
 	maxTTL := time.Duration(config.Cache.MaxTTL) * time.Second
 	h.Cache = cache.NewDNSCache(config.Cache.Size, minTTL, maxTTL)
 	// 检测配置有效性
-	if len(h.GroupMap) <= 0 || len(h.GroupMap["clean"].Callers) <= 0 || len(h.GroupMap["dirty"].Callers) <= 0 {
+	if len(h.Groups) <= 0 || len(h.Groups["clean"].Callers) <= 0 || len(h.Groups["dirty"].Callers) <= 0 {
 		log.Errorf("dns of clean/dirty group cannot be empty")
 		return nil, fmt.Errorf("dns of clean/dirty group cannot be empty")
 	}

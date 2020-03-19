@@ -75,7 +75,7 @@ type Handler struct {
 	GFWMatcher   *matcher.ABPlus
 	CNIP         *cache.RamSet
 	HostsReaders []hosts.Reader
-	GroupMap     map[string]*Group
+	Groups       map[string]*Group
 }
 
 // HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
@@ -135,7 +135,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 
 	// 判断域名是否匹配指定规则
 	var name string
-	for name, group = range handler.GroupMap {
+	for name, group = range handler.Groups {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
 			fields["group"] = name
 			log.WithFields(fields).Infof("match by rules")
@@ -144,7 +144,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		}
 	}
 	// 先用clean组dns解析
-	fields["group"], group = "clean", handler.GroupMap["clean"]
+	fields["group"], group = "clean", handler.Groups["clean"]
 	r = group.CallDNS(request)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
@@ -154,7 +154,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		log.WithFields(fields).Infof("not match gfwlist")
 	} else {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
-		fields["group"], group = "dirty", handler.GroupMap["dirty"]
+		fields["group"], group = "dirty", handler.Groups["dirty"]
 		log.WithFields(fields).Infof("match gfwlist")
 		r = group.CallDNS(request)
 	}
@@ -162,24 +162,24 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	handler.Cache.Set(request, r)
 }
 
-// Refresh 刷新配置，复制newHandler中除Mux、Listen之外的值
-func (handler *Handler) Refresh(newHandler *Handler) {
+// Refresh 刷新配置，复制target中除Mux、Listen之外的值
+func (handler *Handler) Refresh(target *Handler) {
 	handler.Mux.Lock()
 	defer handler.Mux.Unlock()
 
-	if newHandler.Cache != nil {
-		handler.Cache = newHandler.Cache
+	if target.Cache != nil {
+		handler.Cache = target.Cache
 	}
-	if newHandler.GFWMatcher != nil {
-		handler.GFWMatcher = newHandler.GFWMatcher
+	if target.GFWMatcher != nil {
+		handler.GFWMatcher = target.GFWMatcher
 	}
-	if newHandler.CNIP != nil {
-		handler.CNIP = newHandler.CNIP
+	if target.CNIP != nil {
+		handler.CNIP = target.CNIP
 	}
-	if newHandler.HostsReaders != nil {
-		handler.HostsReaders = newHandler.HostsReaders
+	if target.HostsReaders != nil {
+		handler.HostsReaders = target.HostsReaders
 	}
-	if newHandler.GroupMap != nil {
-		handler.GroupMap = newHandler.GroupMap
+	if target.Groups != nil {
+		handler.Groups = target.Groups
 	}
 }

@@ -8,7 +8,8 @@ import (
 	"os"
 )
 
-var VERSION = "unknown"
+// VERSION 程序版本号
+var VERSION = "v0.8.0-dev"
 
 func main() {
 	// 读取命令行参数

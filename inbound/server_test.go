@@ -42,7 +42,7 @@ func TestHandler(t *testing.T) {
 	}
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
-	handler.GroupMap = map[string]*Group{"clean": group, "dirty": group}
+	handler.Groups = map[string]*Group{"clean": group, "dirty": group}
 	// 初始化所需参数和返回值
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.ParseIP("1.1.1.1")}}}
 	writer, req := &MockRespWriter{}, &dns.Msg{}
