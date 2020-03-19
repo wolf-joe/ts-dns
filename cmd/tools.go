@@ -18,17 +18,7 @@ import (
 	"time"
 )
 
-type tomlStruct struct {
-	Listen     string
-	GFWList    string
-	CNIP       string
-	HostsFiles []string `toml:"hosts_files"`
-	Hosts      map[string]string
-	Cache      cacheStruct
-	Groups     map[string]groupStruct
-}
-
-type groupStruct struct {
+type groupConf struct {
 	Socks5     string
 	IPSet      string
 	IPSetTTL   int `toml:"ipset_ttl"`
@@ -39,15 +29,105 @@ type groupStruct struct {
 	Rules      []string
 }
 
-type cacheStruct struct {
+type cacheConf struct {
 	Size   int
 	MinTTL int `toml:"min_ttl"`
 	MaxTTL int `toml:"max_ttl"`
 }
 
+type tomlConf struct {
+	Listen     string
+	GFWList    string
+	CNIP       string
+	HostsFiles []string `toml:"hosts_files"`
+	Hosts      map[string]string
+	Cache      *cacheConf
+	Groups     map[string]*groupConf
+}
+
+// 根据配置生成cache实例
+func (conf *tomlConf) genCache() *cache.DNSCache {
+	if conf.Cache.Size == 0 {
+		conf.Cache.Size = 4096
+	}
+	if conf.Cache.MinTTL == 0 {
+		conf.Cache.MinTTL = 60
+	}
+	if conf.Cache.MaxTTL == 0 {
+		conf.Cache.MaxTTL = 86400
+	}
+	minTTL := time.Duration(conf.Cache.MinTTL) * time.Second
+	maxTTL := time.Duration(conf.Cache.MaxTTL) * time.Second
+	return cache.NewDNSCache(conf.Cache.Size, minTTL, maxTTL)
+}
+
+// 根据配置生成hosts实例列表
+func (conf *tomlConf) genHosts() (readers []hosts.Reader) {
+	// 读取Hosts列表
+	var lines []string
+	for hostname, ip := range conf.Hosts {
+		lines = append(lines, ip+" "+hostname)
+	}
+	if len(lines) > 0 {
+		text := strings.Join(lines, "\n")
+		readers = append(readers, hosts.NewReaderByText(text))
+	}
+	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
+	for _, filename := range conf.HostsFiles {
+		if reader, err := hosts.NewReaderByFile(filename, 0); err != nil {
+			log.WithField("file", filename).Warnf("read hosts error: %v", err)
+		} else {
+			readers = append(readers, reader)
+		}
+	}
+	return
+}
+
+func (conf *groupConf) genCallers() (callers []outbound.Caller) {
+	// 读取socks5代理地址
+	var dialer proxy.Dialer
+	if conf.Socks5 != "" {
+		dialer, _ = proxy.SOCKS5("tcp", conf.Socks5, nil, proxy.Direct)
+	}
+	// 为每个出站dns服务器创建对应Caller对象
+	for _, addr := range conf.DNS { // TCP/UDP服务器
+		network := "udp"
+		if strings.HasSuffix(addr, "/tcp") {
+			addr, network = addr[:len(addr)-4], "tcp"
+		}
+		if addr != "" {
+			if !strings.Contains(addr, ":") {
+				addr += ":53"
+			}
+			callers = append(callers, outbound.NewDNSCaller(addr, network, dialer))
+		}
+	}
+	for _, addr := range conf.DoT { // dns over tls服务器，格式为ip:port@serverName
+		var serverName string
+		if arr := strings.Split(addr, "@"); len(arr) != 2 {
+			continue
+		} else {
+			addr, serverName = arr[0], arr[1]
+		}
+		if addr != "" && serverName != "" {
+			if !strings.Contains(addr, ":") {
+				addr += ":853"
+			}
+			callers = append(callers, outbound.NewDoTCaller(addr, serverName, dialer))
+		}
+	}
+	dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
+	for _, addr := range conf.DoH { // dns over https服务器，格式为https://domain/dns-query
+		if dohReg.MatchString(addr) {
+			callers = append(callers, outbound.NewDoHCaller(addr, dialer))
+		}
+	}
+	return
+}
+
 // 从配置文件里读取ts-dns的配置并打包。如err不为空，则在返回前会输出相应错误信息
 func initHandler(filename string) (h *inbound.Handler, err error) {
-	var config tomlStruct
+	var config tomlConf
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		log.WithField("file", filename).Errorf("read config error: %v", err)
 		return nil, err
@@ -62,15 +142,6 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 	if config.CNIP == "" {
 		config.CNIP = "cnip.txt"
 	}
-	if config.Cache.Size == 0 {
-		config.Cache.Size = 4096
-	}
-	if config.Cache.MinTTL == 0 {
-		config.Cache.MinTTL = 60
-	}
-	if config.Cache.MaxTTL == 0 {
-		config.Cache.MaxTTL = 86400
-	}
 
 	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, Groups: map[string]*inbound.Group{}}
 	// 读取gfwlist
@@ -83,87 +154,27 @@ func initHandler(filename string) (h *inbound.Handler, err error) {
 		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
 		return nil, err
 	}
-	// 读取Hosts列表
-	var lines []string
-	for hostname, ip := range config.Hosts {
-		lines = append(lines, ip+" "+hostname)
-	}
-	if len(lines) > 0 {
-		text := strings.Join(lines, "\n")
-		h.HostsReaders = append(h.HostsReaders, hosts.NewReaderByText(text))
-	}
-	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
-	for _, filename := range config.HostsFiles {
-		if reader, err := hosts.NewReaderByFile(filename, 0); err != nil {
-			log.WithField("file", filename).Warnf("read hosts error: %v", err)
-		} else {
-			h.HostsReaders = append(h.HostsReaders, reader)
-		}
-	}
+	h.HostsReaders = config.genHosts()
+	h.Cache = config.genCache()
 	// 读取每个域名组的配置信息
-	for groupName, groupConf := range config.Groups {
-		// 读取socks5代理地址
-		var dialer proxy.Dialer
-		if groupConf.Socks5 != "" {
-			dialer, _ = proxy.SOCKS5("tcp", groupConf.Socks5, nil, proxy.Direct)
-		}
-		// 为每个出站dns服务器创建对应Caller对象
-		var callers []outbound.Caller
-		for _, addr := range groupConf.DNS { // TCP/UDP服务器
-			network := "udp"
-			if strings.HasSuffix(addr, "/tcp") {
-				addr, network = addr[:len(addr)-4], "tcp"
-			}
-			if addr != "" {
-				if !strings.Contains(addr, ":") {
-					addr += ":53"
-				}
-				callers = append(callers, outbound.NewDNSCaller(addr, network, dialer))
-			}
-		}
-		for _, addr := range groupConf.DoT { // dns over tls服务器，格式为ip:port@serverName
-			var serverName string
-			if arr := strings.Split(addr, "@"); len(arr) != 2 {
-				continue
-			} else {
-				addr, serverName = arr[0], arr[1]
-			}
-			if addr != "" {
-				if !strings.Contains(addr, ":") {
-					addr += ":853"
-				}
-				if serverName != "" {
-					callers = append(callers, outbound.NewDoTCaller(addr, serverName, dialer))
-				}
-			}
-		}
-		dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
-		for _, addr := range groupConf.DoH { // dns over https服务器，格式为https://domain/dns-query
-			if dohReg.MatchString(addr) {
-				callers = append(callers, outbound.NewDoHCaller(addr, dialer))
-			}
-		}
-		group := &inbound.Group{Callers: callers, Concurrent: groupConf.Concurrent}
-		if group.Concurrent {
-			log.Warnln("enable dns concurrent in group " + groupName)
-		}
+	for gName, gConf := range config.Groups {
 		// 读取匹配规则
-		group.Matcher = matcher.NewABPByText(strings.Join(groupConf.Rules, "\n"))
+		group := &inbound.Group{Callers: gConf.genCallers(), Concurrent: gConf.Concurrent}
+		if group.Concurrent {
+			log.Warnln("enable dns concurrent in group " + gName)
+		}
+		group.Matcher = matcher.NewABPByText(strings.Join(gConf.Rules, "\n"))
 		// 读取IPSet配置
-		if groupConf.IPSet != "" {
-			param := &ipset.Params{Timeout: groupConf.IPSetTTL}
-			group.IPSet, err = ipset.New(groupConf.IPSet, "hash:ip", param)
+		if gConf.IPSet != "" {
+			param := &ipset.Params{Timeout: gConf.IPSetTTL}
+			group.IPSet, err = ipset.New(gConf.IPSet, "hash:ip", param)
 			if err != nil {
 				log.Errorf("create ipset error: %v", err)
 				return nil, err
 			}
 		}
-		h.Groups[groupName] = group
+		h.Groups[gName] = group
 	}
-	// 读取cache配置
-	minTTL := time.Duration(config.Cache.MinTTL) * time.Second
-	maxTTL := time.Duration(config.Cache.MaxTTL) * time.Second
-	h.Cache = cache.NewDNSCache(config.Cache.Size, minTTL, maxTTL)
 	// 检测配置有效性
 	if len(h.Groups) <= 0 || len(h.Groups["clean"].Callers) <= 0 || len(h.Groups["dirty"].Callers) <= 0 {
 		log.Errorf("dns of clean/dirty group cannot be empty")
