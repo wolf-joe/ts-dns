@@ -24,6 +24,7 @@ func getSubnet(extra []dns.RR) string {
 	return ""
 }
 
+// DNSCache DNS响应缓存器
 type DNSCache struct {
 	ttlMap *TTLMap
 	size   int
@@ -31,6 +32,25 @@ type DNSCache struct {
 	maxTTL time.Duration
 }
 
+// dns响应的包裹，用以实现动态ttl
+type cacheEntry struct {
+	r      *dns.Msg
+	expire time.Time
+}
+
+func (entry *cacheEntry) Get() *dns.Msg {
+	var ttl int64
+	if ttl = entry.expire.Unix() - time.Now().Unix(); ttl < 0 {
+		return nil
+	}
+	r := entry.r.Copy()
+	for i := 0; i < len(r.Answer); i++ {
+		r.Answer[i].Header().Ttl = uint32(ttl)
+	}
+	return r
+}
+
+// Get 获取DNS响应缓存，响应的ttl为倒计时形式
 func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 	question, extra := request.Question[0], request.Extra
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
@@ -38,11 +58,12 @@ func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 		cacheKey += "." + subnet
 	}
 	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
-		return cacheHit.(*dns.Msg)
+		return cacheHit.(*cacheEntry).Get()
 	}
 	return nil
 }
 
+// Set 设置DNS响应缓存，缓存的ttl由minTTL、maxTTL、响应本身的ttl共同决定
 func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	question, extra := request.Question[0], request.Extra
 	if cache.ttlMap.Len() >= cache.size || r == nil || len(r.Answer) <= 0 {
@@ -61,7 +82,8 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	if ex < cache.minTTL {
 		ex = cache.minTTL
 	}
-	cache.ttlMap.Set(cacheKey, r, ex)
+	entry := &cacheEntry{r: r, expire: time.Now().Add(ex)}
+	cache.ttlMap.Set(cacheKey, entry, ex)
 }
 
 func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {

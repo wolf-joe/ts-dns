@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+func TestCacheEntry(t *testing.T) {
+	resp := &dns.Msg{}
+	rr, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1") // 实际ttl为-1
+	resp.Answer = append(resp.Answer, rr)
+	entry := cacheEntry{r: resp, expire: time.Now().Add(time.Second)} // ttl覆盖为1
+	assert.True(t, entry.Get().Answer[0].Header().Ttl > 0)
+	time.Sleep(time.Second * 2)
+	assert.Nil(t, entry.Get())
+}
+
 func TestGetDNSCache(t *testing.T) {
 	request1, request2, resp := &dns.Msg{}, &dns.Msg{}, &dns.Msg{}
 	rr, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1")
