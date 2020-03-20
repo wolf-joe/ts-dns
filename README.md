@@ -12,11 +12,10 @@
 
 * 默认基于`CN IP列表` + `GFWList`进行域名分组；
 * 支持DNS over UDP/TCP/TLS/HTTP；
-* 支持并发请求上游DNS；
-* 支持通过socks5代理转发DNS请求；
+* 支持并发请求/socks5代理请求上游DNS；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；
-* 支持DNS查询缓存（包括EDNS Client Subnet）；
+* 支持DNS查询缓存（TTL倒计时、ECS缓存）；
 * 支持将查询结果添加至IPSet。
 
 ## DNS查询请求处理流程
@@ -95,6 +94,7 @@
 
 ## TODO
 
+* ping测速择优
 * 完善单元测试
 * 设置fallback DNS
 * 使用ECS转发DNS请求

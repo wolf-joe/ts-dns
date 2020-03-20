@@ -9,7 +9,7 @@ import (
 )
 
 // VERSION 程序版本号
-var VERSION = "v0.8.0-dev"
+var VERSION = "v0.9.0-dev"
 
 func main() {
 	// 读取命令行参数
