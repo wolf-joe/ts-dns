@@ -70,7 +70,7 @@ func TestHandler(t *testing.T) {
 	// mock缓存
 	mocker.MethodSeq(handler.Cache, "Get", []gomonkey.Params{
 		{resp}, {nil}, // 前半部分用
-		{nil}, {nil}, {nil},
+		{nil}, {resp}, {nil}, {resp}, {nil}, {resp},
 	})
 	handler.ServeDNS(writer, req) // 命中缓存
 	assert.Equal(t, writer.r, resp)

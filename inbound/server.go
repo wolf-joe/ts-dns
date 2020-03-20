@@ -160,6 +160,9 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)
+	if nr := handler.Cache.Get(request); nr != nil {
+		r = nr // 从缓存中获取记录以更新ttl
+	}
 }
 
 // Refresh 刷新配置，复制target中除Mux、Listen之外的值
