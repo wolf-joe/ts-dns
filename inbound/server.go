@@ -122,6 +122,17 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 
 	question := request.Question[0]
 	fields := log.Fields{"domain": question.Name, "src": resp.RemoteAddr()}
+	fields["type"] = dns.Type(question.Qtype).String()
+	// 判断是否是PTR请求
+	if question.Qtype == dns.TypePTR {
+		ptr := &dns.PTR{Hdr: dns.RR_Header{
+			Name: question.Name, Rrtype: dns.TypePTR,
+			Class: question.Qclass, Ttl: 600,
+		}, Ptr: "ts-dns."}
+		r = &dns.Msg{Answer: []dns.RR{ptr}}
+		log.WithFields(fields).Infof("generate ptr")
+		return
+	}
 	// 检测是否命中hosts
 	if r = handler.HitHosts(request); r != nil {
 		log.WithFields(fields).Infof("hit hosts")

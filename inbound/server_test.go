@@ -44,6 +44,8 @@ func TestHandler(t *testing.T) {
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
 	handler.Groups = map[string]*Group{"clean": group, "dirty": group}
 	// 初始化所需参数和返回值
+	ptrReq := &dns.Msg{}
+	ptrReq.SetQuestion("ip.cn.", dns.TypePTR)
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.ParseIP("1.1.1.1")}}}
 	writer, req := &MockRespWriter{}, &dns.Msg{}
 	req.SetQuestion("ip.cn.", dns.TypeA)
@@ -60,6 +62,9 @@ func TestHandler(t *testing.T) {
 	assert.NotNil(t, handler.HitHosts(req)) // Record返回值正常
 
 	// 测试ServeDNS前半部分
+	// 测试ptr
+	handler.ServeDNS(writer, ptrReq)
+	assert.NotNil(t, writer.r)
 	// mock HitHosts
 	mocker.MethodSeq(handler, "HitHosts", []gomonkey.Params{
 		{resp}, {nil}, {nil}, // 前半部分用
