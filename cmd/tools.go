@@ -45,6 +45,19 @@ type tomlConf struct {
 	Groups     map[string]*groupConf
 }
 
+// 为部分字段默认配置
+func (conf *tomlConf) setDefault() {
+	if conf.Listen == "" {
+		conf.Listen = ":53"
+	}
+	if conf.GFWList == "" {
+		conf.GFWList = "gfwlist.txt"
+	}
+	if conf.CNIP == "" {
+		conf.CNIP = "cnip.txt"
+	}
+}
+
 // 根据配置生成cache实例
 func (conf *tomlConf) genCache() *cache.DNSCache {
 	if conf.Cache.Size == 0 {
@@ -62,7 +75,7 @@ func (conf *tomlConf) genCache() *cache.DNSCache {
 }
 
 // 根据配置生成hosts实例列表
-func (conf *tomlConf) genHosts() (readers []hosts.Reader) {
+func (conf *tomlConf) genHostsReader() (readers []hosts.Reader) {
 	// 读取Hosts列表
 	var lines []string
 	for hostname, ip := range conf.Hosts {
@@ -125,58 +138,58 @@ func (conf *groupConf) genCallers() (callers []outbound.Caller) {
 	return
 }
 
-// 从配置文件里读取ts-dns的配置并打包。如err不为空，则在返回前会输出相应错误信息
-func initHandler(filename string) (h *inbound.Handler, err error) {
+func (conf *groupConf) genIPSet() (ipSet *ipset.IPSet, err error) {
+	if conf.IPSet != "" {
+		param := &ipset.Params{Timeout: conf.IPSetTTL}
+		ipSet, err = ipset.New(conf.IPSet, "hash:ip", param)
+		if err != nil {
+			return nil, err
+		}
+		return ipSet, nil
+	}
+	return nil, nil
+}
+
+// 从配置文件里读取ts-dns的配置并打包为handler。如err不为空，则在返回前会输出相应错误信息
+func initHandler(filename string) (handler *inbound.Handler, err error) {
 	var config tomlConf
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		log.WithField("file", filename).Errorf("read config error: %v", err)
 		return nil, err
 	}
-	// 默认配置
-	if config.Listen == "" {
-		config.Listen = ":53"
-	}
-	if config.GFWList == "" {
-		config.GFWList = "gfwlist.txt"
-	}
-	if config.CNIP == "" {
-		config.CNIP = "cnip.txt"
-	}
-
-	h = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, Groups: map[string]*inbound.Group{}}
+	config.setDefault()
+	// 初始化handler
+	handler = &inbound.Handler{Mux: new(sync.RWMutex), Groups: map[string]*inbound.Group{}}
+	handler.Listen = config.Listen
 	// 读取gfwlist
-	if h.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
+	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
 		return nil, err
 	}
 	// 读取cnip
-	if h.CNIP, err = cache.NewRamSetByFile(config.CNIP); err != nil {
+	if handler.CNIP, err = cache.NewRamSetByFile(config.CNIP); err != nil {
 		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
 		return nil, err
 	}
-	h.HostsReaders = config.genHosts()
-	h.Cache = config.genCache()
+	handler.HostsReaders = config.genHostsReader()
+	handler.Cache = config.genCache()
 	// 读取每个域名组的配置信息
-	for gName, gConf := range config.Groups {
+	for name, group := range config.Groups {
+		handlerGroup := &inbound.Group{Callers: group.genCallers(), Concurrent: group.Concurrent}
+		if handlerGroup.Concurrent {
+			log.Warnln("enable dns concurrent in group " + name)
+		}
 		// 读取匹配规则
-		group := &inbound.Group{Callers: gConf.genCallers(), Concurrent: gConf.Concurrent}
-		if group.Concurrent {
-			log.Warnln("enable dns concurrent in group " + gName)
-		}
-		group.Matcher = matcher.NewABPByText(strings.Join(gConf.Rules, "\n"))
+		handlerGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
 		// 读取IPSet配置
-		if gConf.IPSet != "" {
-			param := &ipset.Params{Timeout: gConf.IPSetTTL}
-			group.IPSet, err = ipset.New(gConf.IPSet, "hash:ip", param)
-			if err != nil {
-				log.Errorf("create ipset error: %v", err)
-				return nil, err
-			}
+		if handlerGroup.IPSet, err = group.genIPSet(); err != nil {
+			log.Errorf("create ipset error: %v", err)
+			return nil, err
 		}
-		h.Groups[gName] = group
+		handler.Groups[name] = handlerGroup
 	}
 	// 检测配置有效性
-	if len(h.Groups) <= 0 || len(h.Groups["clean"].Callers) <= 0 || len(h.Groups["dirty"].Callers) <= 0 {
+	if len(handler.Groups) <= 0 || len(handler.Groups["clean"].Callers) <= 0 || len(handler.Groups["dirty"].Callers) <= 0 {
 		log.Errorf("dns of clean/dirty group cannot be empty")
 		return nil, fmt.Errorf("dns of clean/dirty group cannot be empty")
 	}
