@@ -151,6 +151,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			fields["group"] = name
 			log.WithFields(fields).Infof("match by rules")
 			r = group.CallDNS(request)
+			// 设置dns缓存
+			handler.Cache.Set(request, r)
 			return
 		}
 	}
