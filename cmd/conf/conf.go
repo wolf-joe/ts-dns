@@ -118,6 +118,9 @@ func (conf *Conf) SetDefault() {
 
 // GenCache 根据cache section里的配置生成cache实例
 func (conf *Conf) GenCache() *cache.DNSCache {
+	if conf.Cache == nil {
+		conf.Cache = &Cache{}
+	}
 	if conf.Cache.Size == 0 {
 		conf.Cache.Size = 4096
 	}
