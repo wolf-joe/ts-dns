@@ -154,6 +154,26 @@ func (conf *Conf) GenHostsReader() (readers []hosts.Reader) {
 	return
 }
 
+// GenGroups 读取groups section里的配置，生成inbound.Group map
+func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
+	groups = map[string]*inbound.Group{}
+	// 读取每个域名组的配置信息
+	for name, group := range conf.Groups {
+		inboundGroup := &inbound.Group{Callers: group.GenCallers(), Concurrent: group.Concurrent}
+		if inboundGroup.Concurrent {
+			log.Warnln("enable dns concurrent in group " + name)
+		}
+		// 读取匹配规则
+		inboundGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
+		// 读取IPSet配置
+		if inboundGroup.IPSet, err = group.GenIPSet(); err != nil {
+			return nil, err
+		}
+		groups[name] = inboundGroup
+	}
+	return groups, nil
+}
+
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
 func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	var config Conf
@@ -163,8 +183,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	config.SetDefault()
 	// 初始化handler
-	handler = &inbound.Handler{Mux: new(sync.RWMutex), Groups: map[string]*inbound.Group{}}
-	handler.Listen = config.Listen
+	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
@@ -175,27 +194,16 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
 		return nil, err
 	}
+	// 读取groups
+	if handler.Groups, err = config.GenGroups(); err != nil {
+		log.Errorf("create ipset error: %v", err)
+		return nil, err
+	}
 	handler.HostsReaders = config.GenHostsReader()
 	handler.Cache = config.GenCache()
-	// 读取每个域名组的配置信息
-	for name, group := range config.Groups {
-		handlerGroup := &inbound.Group{Callers: group.GenCallers(), Concurrent: group.Concurrent}
-		if handlerGroup.Concurrent {
-			log.Warnln("enable dns concurrent in group " + name)
-		}
-		// 读取匹配规则
-		handlerGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
-		// 读取IPSet配置
-		if handlerGroup.IPSet, err = group.GenIPSet(); err != nil {
-			log.Errorf("create ipset error: %v", err)
-			return nil, err
-		}
-		handler.Groups[name] = handlerGroup
-	}
 	// 检测配置有效性
-	if len(handler.Groups) <= 0 || len(handler.Groups["clean"].Callers) <= 0 || len(handler.Groups["dirty"].Callers) <= 0 {
-		log.Errorf("dns of clean/dirty group cannot be empty")
-		return nil, fmt.Errorf("dns of clean/dirty group cannot be empty")
+	if !handler.IsValid() {
+		return nil, fmt.Errorf("")
 	}
 	return
 }

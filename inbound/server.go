@@ -199,3 +199,16 @@ func (handler *Handler) Refresh(target *Handler) {
 		handler.Groups = target.Groups
 	}
 }
+
+// IsValid 判断Handler是否符合运行条件
+func (handler *Handler) IsValid() bool {
+	if handler.Groups == nil {
+		return false
+	}
+	clean, dirty := handler.Groups["clean"], handler.Groups["dirty"]
+	if clean == nil || len(clean.Callers) <= 0 || dirty == nil || len(dirty.Callers) <= 0 {
+		log.Errorf("dns of clean/dirty group cannot be empty")
+		return false
+	}
+	return true
+}

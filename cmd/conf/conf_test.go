@@ -67,6 +67,18 @@ func TestConf(t *testing.T) {
 	readers := conf.GenHostsReader()
 	assert.Equal(t, len(readers), 2)
 	assert.NotNil(t, readers[0].IP("host", false))
+	// 测试GenGroups
+	conf.Groups = map[string]*Group{"test": {Concurrent: true}}
+	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{{nil}, {nil}})
+	mocker.MethodSeq(&Group{}, "GenIPSet", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {nil, nil},
+	})
+	groups, err := conf.GenGroups() // GenIPSet失败
+	assert.NotNil(t, err)
+	assert.Nil(t, groups)
+	groups, err = conf.GenGroups() // GenIPSet成功
+	assert.Nil(t, err)
+	assert.NotNil(t, groups)
 }
 
 func TestNewHandler(t *testing.T) {
@@ -75,24 +87,36 @@ func TestNewHandler(t *testing.T) {
 
 	mocker.FuncSeq(toml.DecodeFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
+		{nil, nil}, {nil, nil},
 	})
 	handler, err := NewHandler("") // DecodeFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.FuncSeq(matcher.NewABPByFile, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil},
+		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
+		{nil, nil},
 	})
 	handler, err = NewHandler("") // NewABPByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.FuncSeq(cache.NewRamSetByFile, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {nil, nil},
+		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
 	})
 	handler, err = NewHandler("") // NewRamSetByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
-	mocker.MethodSeq(&Conf{}, "GenCache", []gomonkey.Params{{nil}})
-	handler, err = NewHandler("") // NewRamSetByFile失败
+	mocker.MethodSeq(&Conf{}, "GenGroups", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil},
+	})
+	handler, err = NewHandler("") // GenGroups失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
+	mocker.MethodSeq(&Conf{}, "GenCache", []gomonkey.Params{{nil}, {nil}})
+	mocker.MethodSeq(handler, "IsValid", []gomonkey.Params{{false}, {true}})
+	handler, err = NewHandler("") // 验证配置失败
+	assert.Nil(t, handler)
+	assert.NotNil(t, err)
+	handler, err = NewHandler("") // 验证配置成功
+	assert.NotNil(t, handler)
+	assert.Nil(t, err)
 }

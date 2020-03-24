@@ -109,6 +109,12 @@ func TestHandler(t *testing.T) {
 
 	// 测试Refresh
 	handler.Refresh(handler)
+	// 测试IsValid
+	assert.True(t, handler.IsValid())
+	handler = &Handler{}
+	assert.False(t, handler.IsValid())
+	handler.Groups = map[string]*Group{}
+	assert.False(t, handler.IsValid())
 }
 
 func TestGroup(t *testing.T) {
