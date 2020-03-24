@@ -10,10 +10,12 @@ import (
 	"net/http"
 )
 
+// Caller 上游DNS请求基类
 type Caller interface {
 	Call(request *dns.Msg) (r *dns.Msg, err error)
 }
 
+// DNSCaller UDP/TCP/DOT请求类
 type DNSCaller struct {
 	client *dns.Client
 	server string
@@ -21,6 +23,7 @@ type DNSCaller struct {
 	conn   *dns.Conn
 }
 
+// Call 向目标上游DNS转发请求
 func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	if caller.proxy == nil { // 不使用代理，直接发送dns请求
 		r, _, err = caller.client.Exchange(request, caller.server)
@@ -44,23 +47,25 @@ func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	return caller.conn.ReadMsg()
 }
 
-// 创建一个DNS Caller，需要服务器地址（ip+端口）、网络类型（udp、tcp），可选代理
+// NewDNSCaller 创建一个UDP/TCP Caller，需要服务器地址（ip+端口）、网络类型（udp、tcp），可选代理
 func NewDNSCaller(server, network string, proxy proxy.Dialer) *DNSCaller {
 	client := &dns.Client{Net: network}
 	return &DNSCaller{client: client, server: server, proxy: proxy, conn: &dns.Conn{}}
 }
 
-// 创建一个DoT Caller，需要服务器地址（ip+端口）、证书名称，可选代理
+// NewDoTCaller 创建一个DoT Caller，需要服务器地址（ip+端口）、证书名称，可选代理
 func NewDoTCaller(server, serverName string, proxy proxy.Dialer) *DNSCaller {
 	client := &dns.Client{Net: "tcp-tls", TLSConfig: &tls.Config{ServerName: serverName}}
 	return &DNSCaller{client: client, server: server, proxy: proxy, conn: &dns.Conn{}}
 }
 
+// DoHCaller DoT请求类
 type DoHCaller struct {
 	client *http.Client
 	url    string
 }
 
+// Call 向上游DNS转发请求
 func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	// 打包请求
 	var buf []byte
@@ -87,6 +92,7 @@ func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	return msg, nil
 }
 
+// NewDoHCaller 创建一个DoH Caller，需要服务器url（https://domain/dns-query），可选代理
 func NewDoHCaller(url string, proxy proxy.Dialer) *DoHCaller {
 	client := &http.Client{}
 	if proxy != nil {
