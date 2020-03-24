@@ -118,9 +118,6 @@ func (conf *Conf) SetDefault() {
 
 // GenCache 根据cache section里的配置生成cache实例
 func (conf *Conf) GenCache() *cache.DNSCache {
-	if conf.Cache == nil {
-		conf.Cache = &Cache{}
-	}
 	if conf.Cache.Size == 0 {
 		conf.Cache.Size = 4096
 	}
@@ -179,7 +176,7 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
 func NewHandler(filename string) (handler *inbound.Handler, err error) {
-	var config Conf
+	config := Conf{Cache: &Cache{}}
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		log.WithField("file", filename).Errorf("read config error: %v", err)
 		return nil, err
