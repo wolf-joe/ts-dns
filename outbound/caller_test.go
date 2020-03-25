@@ -5,6 +5,7 @@ import (
 	mock "github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
+	mock2 "github.com/wolf-joe/ts-dns/mock"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
@@ -23,14 +24,6 @@ func assertFail(t *testing.T, val *dns.Msg, err error) {
 func assertSuccess(t *testing.T, val *dns.Msg, err error) {
 	assert.NotNil(t, val)
 	assert.Nil(t, err)
-}
-
-func MockFuncSeq(target interface{}, outputs []mock.Params) *mock.Patches {
-	var cells []mock.OutputCell
-	for _, output := range outputs {
-		cells = append(cells, mock.OutputCell{Values: output})
-	}
-	return mock.ApplyFuncSeq(target, cells)
 }
 
 func MockMethodSeq(target interface{}, methodName string, outputs []mock.Params) *mock.Patches {
@@ -85,37 +78,47 @@ func TestDNSCaller(t *testing.T) {
 }
 
 func TestDoHCaller(t *testing.T) {
-	req := &dns.Msg{}
-	caller := NewDoHCaller("", dialer)
+	mocker := mock2.NewMocker()
+	defer mocker.Reset()
 
-	p1 := MockMethodSeq(req, "PackBuffer", []mock.Params{
-		{nil, fmt.Errorf("err")}, {[]byte{1}, nil},
+	req := &dns.Msg{}
+	caller := NewDoHCaller("", "", dialer)
+	httpReq := &http.Request{Header: map[string][]string{}}
+
+	mocker.MethodSeq(req, "PackBuffer", []mock.Params{
+		{nil, fmt.Errorf("err")}, {[]byte{1}, nil}, {[]byte{1}, nil},
 		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
 	})
-	p2 := MockMethodSeq(caller.client, "Post", []mock.Params{
+	mocker.FuncSeq(http.NewRequest, []mock.Params{
+		{nil, fmt.Errorf("err")}, {httpReq, nil}, {httpReq, nil},
+		{httpReq, nil}, {httpReq, nil},
+	})
+	mocker.MethodSeq(caller.client, "Do", []mock.Params{
 		{nil, fmt.Errorf("err")}, {&http.Response{Body: &net.TCPConn{}}, nil},
 		{&http.Response{Body: &net.TCPConn{}}, nil},
 		{&http.Response{Body: &net.TCPConn{}}, nil},
 	})
-	p3 := MockFuncSeq(ioutil.ReadAll, []mock.Params{
+	mocker.FuncSeq(ioutil.ReadAll, []mock.Params{
 		{nil, fmt.Errorf("err")}, {make([]byte, 1), nil},
 		{make([]byte, 12), nil},
 	})
-	defer func() { p1.Reset(); p2.Reset(); p3.Reset() }()
 
 	// Pack失败
 	r, err := caller.Call(req)
 	assertFail(t, r, err)
-	// Pack成功，但Post失败
+	// Pack成功，但NewRequest失败
 	r, err = caller.Call(req)
 	assertFail(t, r, err)
-	// Pack、Post成功，但ReadAll失败
+	// Pack、NewRequest成功，但Do失败
 	r, err = caller.Call(req)
 	assertFail(t, r, err)
-	// Pack、Post、ReadAll成功，但Unpack失败
+	// Pack、NewRequest、Do成功，但ReadAll失败
 	r, err = caller.Call(req)
 	assertFail(t, r, err)
-	// Pack、Post、ReadAll、Unpack成功
+	// Pack、NewRequest、Do、ReadAll成功，但Unpack失败
+	r, err = caller.Call(req)
+	assertFail(t, r, err)
+	// Pack、NewRequest、Do、ReadAll、Unpack成功
 	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
 }
