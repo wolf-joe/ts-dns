@@ -45,3 +45,12 @@ func TestGetDNSCache(t *testing.T) {
 	assert.True(t, cache.ttlMap.Len() == 1)
 	assert.True(t, cache.Get(request2) != nil)
 }
+
+func TestTTLRewrite(t *testing.T) {
+	rr, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1")
+	req, resp := &dns.Msg{}, &dns.Msg{Answer: []dns.RR{rr}}
+	req.SetQuestion("ip.cn.", dns.TypeA)
+	cache := NewDNSCache(1, time.Minute, time.Hour*24)
+	cache.Set(req, resp)
+	assert.NotEqual(t, resp.Answer[0].Header().Ttl, uint32(0))
+}

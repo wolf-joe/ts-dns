@@ -82,6 +82,9 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	if ex < cache.minTTL {
 		ex = cache.minTTL
 	}
+	for i := 0; i < len(r.Answer); i++ {
+		r.Answer[i].Header().Ttl = uint32(ex)
+	}
 	entry := &cacheEntry{r: r, expire: time.Now().Add(ex)}
 	cache.ttlMap.Set(cacheKey, entry, ex)
 }
