@@ -8,7 +8,6 @@ cnip = "cnip.txt"  # 中国ip网段列表，用于辅助域名分组
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 [hosts] # 自定义域名映射
 "example.com" = "8.8.8.8"
-"cloudflare-dns.com" = "1.0.0.1"  # 防止下文提到的DoH递归解析
 
 [cache]  # dns缓存配置
 size = 4096  # 缓存大小，为负数时禁用缓存
@@ -25,8 +24,8 @@ max_ttl = 86400  # 最大ttl，单位为秒
   socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析
   dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns
   dot = ["1.0.0.1:853@cloudflare-dns.com"]  # dns over tls服务器
-  # 警告：如果本机的dns指向ts-dns自身，且DoH地址中的域名被归类到该组，则会出现递归解析的情况，此时需要在上面的hosts中指定对应IP
-  doh = ["https://cloudflare-dns.com/dns-query"]  # dns over https服务器
+  # 警告：下一行的doh地址格式与v0.8.1及以前版本的ts-dns不兼容
+  doh = ["1.0.0.1:443@cloudflare-dns.com"]  # dns over https服务器，仅支持RFC 8484的POST形式
 
   # 警告：进程启动时会覆盖已有同名IPSet
   ipset = "blocked"  # 目标IPSet名称，该组所有域名的ipv4解析结果将加入到该IPSet中

@@ -37,9 +37,9 @@ func TestGroup(t *testing.T) {
 	callers := group.GenCallers()
 	assert.Empty(t, callers)
 	group.Socks5 = "1.1.1.1"
-	group.DNS = []string{"1.1.1.1", "8.8.8.8:53/tcp"}              // 两个都有效
-	group.DoT = []string{"1.1.1.1", "1.1.1.1@name"}                // 后一个有效
-	group.DoH = []string{"not exists", "https://domain/dns-query"} // 后一个有效
+	group.DNS = []string{"1.1.1.1", "8.8.8.8:53/tcp"}  // 两个都有效
+	group.DoT = []string{"1.1.1.1", "1.1.1.1@name"}    // 后一个有效
+	group.DoH = []string{"not exists", "1.1.1.1@name"} // 后一个有效
 	callers = group.GenCallers()
 	assert.Equal(t, len(callers), 4)
 }
