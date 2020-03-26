@@ -11,6 +11,7 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -75,18 +76,10 @@ func (conf *Group) GenCallers() (callers []outbound.Caller) {
 			callers = append(callers, outbound.NewDoTCaller(addr, serverName, dialer))
 		}
 	}
-	for _, addr := range conf.DoH { // dns over https服务器，格式为ip:port@serverName
-		var serverName string
-		if arr := strings.Split(addr, "@"); len(arr) != 2 {
-			continue
-		} else {
-			addr, serverName = arr[0], arr[1]
-		}
-		if addr != "" && serverName != "" {
-			if !strings.Contains(addr, ":") {
-				addr += ":443"
-			}
-			callers = append(callers, outbound.NewDoHCaller(addr, serverName, dialer))
+	dohReg := regexp.MustCompile(`^https://.+/dns-query$`)
+	for _, addr := range conf.DoH { // dns over https服务器，格式为https://domain/dns-query
+		if dohReg.MatchString(addr) {
+			callers = append(callers, outbound.NewDoHCaller(addr, dialer))
 		}
 	}
 	return
