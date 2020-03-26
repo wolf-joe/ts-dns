@@ -83,12 +83,13 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 		ex = cache.minTTL
 	}
 	for i := 0; i < len(r.Answer); i++ {
-		r.Answer[i].Header().Ttl = uint32(ex)
+		r.Answer[i].Header().Ttl = uint32(ex.Seconds())
 	}
 	entry := &cacheEntry{r: r, expire: time.Now().Add(ex)}
 	cache.ttlMap.Set(cacheKey, entry, ex)
 }
 
+// NewDNSCache 生成一个DNS响应缓存器实例
 func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {
 	c = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
 	c.ttlMap = NewTTLMap(time.Minute)
