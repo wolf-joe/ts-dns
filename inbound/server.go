@@ -165,6 +165,39 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	handler.Cache.Set(request, r)
 }
 
+// Resolve 为DoHCaller解析域名，只需要调用一次。考虑到回环解析，建议在ServerDNS开始后异步调用
+func (handler *Handler) Resolve() {
+	resolveDoH := func(caller *outbound.DoHCaller) {
+		domain, ip := caller.Host, ""
+		// 判断是否有对应Hosts记录
+		for _, reader := range handler.HostsReaders {
+			if ip = reader.IP(domain, false); ip == "" {
+				ip = reader.IP(domain+".", false)
+			}
+			if ip != "" {
+				caller.Servers = append(caller.Servers, ip)
+			}
+		}
+		// 未找到对应hosts记录则使用DoHCaller的Resolve
+		if len(caller.Servers) <= 0 {
+			if err := caller.Resolve(); err != nil {
+				log.Errorf("resolve doh host error: %v", err)
+			}
+		}
+	}
+	// 遍历所有DoHCaller解析host
+	for _, group := range handler.Groups {
+		for _, caller := range group.Callers {
+			switch v := caller.(type) {
+			case *outbound.DoHCaller:
+				resolveDoH(v)
+			default:
+				continue
+			}
+		}
+	}
+}
+
 // Refresh 刷新配置，复制target中除Mux、Listen之外的值
 func (handler *Handler) Refresh(target *Handler) {
 	handler.Mux.Lock()

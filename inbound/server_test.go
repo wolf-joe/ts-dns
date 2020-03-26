@@ -34,6 +34,33 @@ func (r *MockRespWriter) RemoteAddr() net.Addr {
 	return &net.IPNet{}
 }
 
+func TestHandler_Resolve(t *testing.T) {
+	// 初始化Handler
+	handler := &Handler{Mux: new(sync.RWMutex), Cache: cache.NewDNSCache(0, 0, 0),
+		GFWMatcher: matcher.NewABPByText(""), CNIP: cache.NewRamSetByText(""),
+		HostsReaders: []hosts.Reader{hosts.NewReaderByText("1.1.1.1 dns1")},
+	}
+	// 初始化Caller
+	caller1, err := outbound.NewDoHCaller("https://dns1/", nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, caller1)
+	caller2, err := outbound.NewDoHCaller("https://dns2/", nil)
+	assert.Nil(t, err)
+	assert.NotNil(t, caller2)
+	callers := []outbound.Caller{caller1, caller2, &outbound.DNSCaller{}}
+	handler.Groups = map[string]*Group{"clean": {Callers: callers}}
+
+	mocker := mock.NewMocker()
+	defer mocker.Reset()
+	// 测试Resolve
+	mocker.MethodSeq(caller2, "Resolve", []gomonkey.Params{
+		{fmt.Errorf("err2")},
+	})
+	handler.Resolve()
+	assert.Len(t, caller1.Servers, 1)
+	assert.Len(t, caller2.Servers, 0)
+}
+
 func TestHandler(t *testing.T) {
 	// 初始化handler
 	handler := &Handler{Mux: new(sync.RWMutex), Cache: cache.NewDNSCache(0, 0, 0),
