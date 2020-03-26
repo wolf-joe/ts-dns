@@ -34,6 +34,8 @@ func main() {
 		log.Warnf("auto reload " + *filename)
 		go autoReload(handler, *filename)
 	}
+	// 启动dns服务后异步解析DoH服务器域名
+	go func() { time.Sleep(time.Second); handler.ResolveDoH() }()
 	// 启动dns服务
 	srv := &dns.Server{Addr: handler.Listen, Net: "udp", Handler: handler}
 	log.Warnf("listen on %s/udp", handler.Listen)
