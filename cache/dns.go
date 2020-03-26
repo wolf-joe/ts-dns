@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"github.com/miekg/dns"
+	"math/rand"
 	"strconv"
 	"time"
 )
@@ -58,7 +59,12 @@ func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 		cacheKey += "." + subnet
 	}
 	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
-		return cacheHit.(*cacheEntry).Get()
+		r := cacheHit.(*cacheEntry).Get()
+		rand.Seed(time.Now().UnixNano()) // random record order
+		rand.Shuffle(len(r.Answer), func(i, j int) {
+			r.Answer[i], r.Answer[j] = r.Answer[j], r.Answer[i]
+		})
+		return r
 	}
 	return nil
 }

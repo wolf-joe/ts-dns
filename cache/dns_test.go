@@ -47,10 +47,13 @@ func TestGetDNSCache(t *testing.T) {
 }
 
 func TestTTLRewrite(t *testing.T) {
-	rr, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1")
-	req, resp := &dns.Msg{}, &dns.Msg{Answer: []dns.RR{rr}}
+	rr1, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1")
+	rr2, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.2")
+	req, resp := &dns.Msg{}, &dns.Msg{Answer: []dns.RR{rr1, rr2}}
 	req.SetQuestion("ip.cn.", dns.TypeA)
 	cache := NewDNSCache(1, time.Minute, time.Hour*24)
 	cache.Set(req, resp)
 	assert.NotEqual(t, resp.Answer[0].Header().Ttl, uint32(0))
+	// 顺便测试random record order
+	cache.Get(req)
 }
