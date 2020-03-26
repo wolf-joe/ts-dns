@@ -165,8 +165,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	handler.Cache.Set(request, r)
 }
 
-// Resolve 为DoHCaller解析域名，只需要调用一次。考虑到回环解析，建议在ServerDNS开始后异步调用
-func (handler *Handler) Resolve() {
+// ResolveDoH 为DoHCaller解析域名，只需要调用一次。考虑到回环解析，建议在ServerDNS开始后异步调用
+func (handler *Handler) ResolveDoH() {
 	resolveDoH := func(caller *outbound.DoHCaller) {
 		domain, ip := caller.Host, ""
 		// 判断是否有对应Hosts记录
@@ -182,8 +182,10 @@ func (handler *Handler) Resolve() {
 		if len(caller.Servers) <= 0 {
 			if err := caller.Resolve(); err != nil {
 				log.Errorf("resolve doh host error: %v", err)
+				return
 			}
 		}
+		log.Infof("resolve doh (%s): %v", caller.Host, caller.Servers)
 	}
 	// 遍历所有DoHCaller解析host
 	for _, group := range handler.Groups {

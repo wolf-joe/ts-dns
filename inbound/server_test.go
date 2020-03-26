@@ -56,7 +56,7 @@ func TestHandler_Resolve(t *testing.T) {
 	mocker.MethodSeq(caller2, "Resolve", []gomonkey.Params{
 		{fmt.Errorf("err2")},
 	})
-	handler.Resolve()
+	handler.ResolveDoH()
 	assert.Len(t, caller1.Servers, 1)
 	assert.Len(t, caller2.Servers, 0)
 }
