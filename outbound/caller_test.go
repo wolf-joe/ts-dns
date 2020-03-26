@@ -82,9 +82,43 @@ func TestDoHCaller(t *testing.T) {
 	defer mocker.Reset()
 
 	req := &dns.Msg{}
-	caller := NewDoHCaller("", "", dialer)
 	httpReq := &http.Request{Header: map[string][]string{}}
 
+	// 测试NewDoHCaller
+	_, err := NewDoHCaller("%%%%", dialer) // url解析失败
+	assert.NotNil(t, err)
+	_, err = NewDoHCaller("", dialer) // url解析失败
+	assert.NotNil(t, err)
+	_, err = NewDoHCaller("https://:::/", dialer) // url解析失败
+	assert.NotNil(t, err)
+	caller, err := NewDoHCaller("https://host/path", dialer) // url解析成功
+	assert.Nil(t, err)
+	assert.NotNil(t, caller)
+	assert.Equal(t, caller.Host, "host")
+	assert.Equal(t, caller.port, "443")
+	assert.Equal(t, caller.path, "/path")
+	caller, err = NewDoHCaller("https://host:80/path", dialer) // url解析成功
+	assert.Nil(t, err)
+	assert.NotNil(t, caller)
+	assert.Equal(t, caller.port, "80")
+	// 测试.Resolve
+	mocker.FuncSeq(net.LookupIP, []mock.Params{
+		{nil, fmt.Errorf("err")}, {[]net.IP{nil}, nil}, {[]net.IP{{1, 1, 1, 1}}, nil},
+	})
+	err = caller.Resolve() // LookupIP返回异常
+	assert.NotNil(t, err)
+	err = caller.Resolve() // LookupIP返回IP列表异常
+	assert.NotNil(t, err)
+	err = caller.Resolve() // LookupIP返回1.1.1.1
+	assert.Nil(t, err)
+	assert.Equal(t, caller.Servers[0], "1.1.1.1")
+
+	// 测试.Call
+	caller.Servers = []string{}
+	_, err = caller.Call(req) // Servers为空则返回异常
+	assert.NotNil(t, err)
+
+	caller.Servers = []string{"1.1.1.1"}
 	mocker.MethodSeq(req, "PackBuffer", []mock.Params{
 		{nil, fmt.Errorf("err")}, {[]byte{1}, nil}, {[]byte{1}, nil},
 		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
