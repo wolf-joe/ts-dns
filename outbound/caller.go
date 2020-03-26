@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/miekg/dns"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Caller 上游DNS请求基类
@@ -66,9 +68,9 @@ func NewDoTCaller(server, serverName string, proxy proxy.Dialer) *DNSCaller {
 // DoHCaller DoT请求类，Servers和Host暴露给外部方便覆盖.Resolve行为
 type DoHCaller struct {
 	client  *http.Client
+	url     string
 	Servers []string
 	port    string
-	path    string
 	Host    string
 }
 
@@ -79,8 +81,8 @@ func (caller *DoHCaller) Resolve() (err error) {
 		return err
 	}
 	for _, ip := range ips {
-		if ip.String() != "<nil>" {
-			caller.Servers = append(caller.Servers, ip.String())
+		if ip.To4().String() != "<nil>" {
+			caller.Servers = append(caller.Servers, ip.To4().String())
 		}
 	}
 	if len(caller.Servers) <= 0 {
@@ -102,13 +104,10 @@ func (caller *DoHCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
 	// 打包http请求
 	var req *http.Request
 	contentType, payload := "application/dns-message", bytes.NewBuffer(buf)
-	server := caller.Servers[rand.Intn(len(caller.Servers))]
-	u := fmt.Sprintf("https://%s:%s%s", server, caller.port, caller.path)
-	if req, err = http.NewRequest("POST", u, payload); err != nil {
+	if req, err = http.NewRequest("POST", caller.url, payload); err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Host", caller.Host)
 	// 发送http请求
 	var resp *http.Response
 	if resp, err = caller.client.Do(req); err != nil {
@@ -146,10 +145,13 @@ func NewDoHCaller(rawURL string, proxy proxy.Dialer) (caller *DoHCaller, err err
 	if host, port, err = net.SplitHostPort(u.Host); err != nil {
 		return nil, err
 	}
-
-	client := &http.Client{}
-	if proxy != nil {
-		client.Transport = &http.Transport{Dial: proxy.Dial}
+	if proxy == nil {
+		proxy = &net.Dialer{Timeout: time.Second * 3}
 	}
-	return &DoHCaller{client: client, port: port, path: u.Path, Host: host}, nil
+	// 自定义DialContext，用于指定目标ip
+	client := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+		addr = caller.Servers[rand.Intn(len(caller.Servers))] + ":" + caller.port
+		return proxy.Dial(network, addr)
+	}}}
+	return &DoHCaller{client: client, port: port, url: u.String(), Host: host}, nil
 }

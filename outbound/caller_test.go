@@ -91,12 +91,11 @@ func TestDoHCaller(t *testing.T) {
 	assert.NotNil(t, err)
 	_, err = NewDoHCaller("https://:::/", dialer) // url解析失败
 	assert.NotNil(t, err)
-	caller, err := NewDoHCaller("https://host/path", dialer) // url解析成功
+	caller, err := NewDoHCaller("https://host/path", nil) // url解析成功
 	assert.Nil(t, err)
 	assert.NotNil(t, caller)
 	assert.Equal(t, caller.Host, "host")
 	assert.Equal(t, caller.port, "443")
-	assert.Equal(t, caller.path, "/path")
 	caller, err = NewDoHCaller("https://host:80/path", dialer) // url解析成功
 	assert.Nil(t, err)
 	assert.NotNil(t, caller)
@@ -112,6 +111,8 @@ func TestDoHCaller(t *testing.T) {
 	err = caller.Resolve() // LookupIP返回1.1.1.1
 	assert.Nil(t, err)
 	assert.Equal(t, caller.Servers[0], "1.1.1.1")
+	// 测试DialContext
+	_, err = caller.client.Transport.(*http.Transport).DialContext(nil, "", "")
 
 	// 测试.Call
 	caller.Servers = []string{}
