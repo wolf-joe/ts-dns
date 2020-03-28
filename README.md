@@ -57,7 +57,7 @@
     dns = [""]  # 省略
   ```
 
-2. 选择ping值最低的IPv4地址（启用时建议以root权限运行本程序）：
+2. 选择ping值最低的IPv4地址（启用时建议以root权限运行本程序）
   ```toml
   # ...
   [groups.clean]
@@ -104,7 +104,8 @@
 
 ## TODO
 
-* 完善单元测试
+* 理清ipv4/ipv6支持
+* 完善日志记录
 * 设置fallback DNS
 * 使用ECS转发DNS请求
 
