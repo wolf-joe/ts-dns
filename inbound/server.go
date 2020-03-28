@@ -59,8 +59,8 @@ func (group *Group) AddIPSet(r *dns.Msg) {
 	if group.IPSet == nil || r == nil {
 		return
 	}
-	for _, ip := range extractA(r) {
-		if err := group.IPSet.Add(ip, group.IPSet.Timeout); err != nil {
+	for _, a := range extractA(r) {
+		if err := group.IPSet.Add(a.A.String(), group.IPSet.Timeout); err != nil {
 			log.Errorf("add ipset error: %v", err)
 		}
 	}
