@@ -25,6 +25,7 @@ type Group struct {
 	DoT        []string
 	DoH        []string
 	Concurrent bool
+	FastestV4  bool `toml:"fastest_v4"`
 	Rules      []string
 }
 
@@ -159,9 +160,14 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 	groups = map[string]*inbound.Group{}
 	// 读取每个域名组的配置信息
 	for name, group := range conf.Groups {
-		inboundGroup := &inbound.Group{Callers: group.GenCallers(), Concurrent: group.Concurrent}
+		inboundGroup := &inbound.Group{
+			Callers: group.GenCallers(), Concurrent: group.Concurrent, FastestV4: group.FastestV4,
+		}
 		if inboundGroup.Concurrent {
-			log.Warnln("enable dns concurrent in group " + name)
+			log.Warnln("enable concurrent dns in group " + name)
+		}
+		if inboundGroup.FastestV4 {
+			log.Warnln("enable fastest ipv4 in group " + name)
 		}
 		// 读取匹配规则
 		inboundGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))

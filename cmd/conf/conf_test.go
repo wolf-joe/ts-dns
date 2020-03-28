@@ -68,7 +68,7 @@ func TestConf(t *testing.T) {
 	assert.Equal(t, len(readers), 2)
 	assert.NotNil(t, readers[0].IP("host", false))
 	// 测试GenGroups
-	conf.Groups = map[string]*Group{"test": {Concurrent: true}}
+	conf.Groups = map[string]*Group{"test": {Concurrent: true, FastestV4: true}}
 	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{{nil}, {nil}})
 	mocker.MethodSeq(&Group{}, "GenIPSet", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil},
