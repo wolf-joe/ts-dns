@@ -2,9 +2,13 @@ package inbound
 
 import (
 	"github.com/miekg/dns"
+	"github.com/sparrc/go-ping"
 	"github.com/wolf-joe/ts-dns/cache"
 	"net"
+	"time"
 )
+
+const MaxRtt = 500
 
 // 提取dns响应中的A记录列表
 func extractA(r *dns.Msg) (records []*dns.A) {
@@ -28,4 +32,20 @@ func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
 		}
 	}
 	return true
+}
+
+// 获取到目标ip的ping值（毫秒）
+func pingRtt(ip string) (rtt int64) {
+	task, err := ping.NewPinger(ip)
+	if err != nil {
+		return MaxRtt + 1
+	}
+	task.Count, task.Timeout = 1, time.Millisecond*MaxRtt
+	task.SetPrivileged(true)
+	task.Run()
+	stat := task.Statistics()
+	if stat.PacketsRecv >= 1 {
+		return stat.AvgRtt.Milliseconds()
+	}
+	return MaxRtt + 1
 }
