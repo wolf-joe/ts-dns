@@ -152,12 +152,16 @@ func TestGroup(t *testing.T) {
 	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {resp, nil},
 		{nil, fmt.Errorf("err")}, {resp, nil},
+		{nil, fmt.Errorf("err")}, {resp, nil},
 	})
 	assert.Nil(t, group.CallDNS(&dns.Msg{}))    // Call返回error
 	assert.NotNil(t, group.CallDNS(&dns.Msg{})) // Call正常返回
 	// 测试并发CallDNS。两个Caller的并发在单测（-race）时会和mock冲突，这里就不测了
 	//group.Callers = append(group.Callers, &outbound.DNSCaller{})
 	group.Concurrent = true
+	assert.Nil(t, group.CallDNS(&dns.Msg{}))
+	assert.NotNil(t, group.CallDNS(&dns.Msg{}))
+	group.FastestV4 = true
 	assert.Nil(t, group.CallDNS(&dns.Msg{}))
 	assert.NotNil(t, group.CallDNS(&dns.Msg{}))
 	// 测试AddIPSet

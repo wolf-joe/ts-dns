@@ -17,9 +17,10 @@ type Group struct {
 	Matcher    *matcher.ABPlus
 	IPSet      *ipset.IPSet
 	Concurrent bool
+	FastestV4  bool
 }
 
-// CallDNS 依次向组内的dns服务器转发请求，获得非nil响应则返回
+// CallDNS 向组内的dns服务器转发请求
 func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
@@ -37,19 +38,21 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	}
 	// 遍历DNS服务器
 	for _, caller := range group.Callers {
-		if group.Concurrent {
+		if group.Concurrent || group.FastestV4 {
 			go call(caller, request)
 		} else if r := call(caller, request); r != nil {
 			return r
 		}
 	}
 	// 并发情况下依次提取channel中的返回值
-	if group.Concurrent {
+	if group.Concurrent && !group.FastestV4 {
 		for i := 0; i < len(group.Callers); i++ {
 			if r := <-ch; r != nil {
 				return r
 			}
 		}
+	} else if group.FastestV4 { // 选择ping值最低的IPv4地址作为返回值
+		return fastestA(ch, len(group.Callers))
 	}
 	return nil
 }

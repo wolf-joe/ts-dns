@@ -4,7 +4,9 @@ import (
 	"github.com/miekg/dns"
 	"github.com/sparrc/go-ping"
 	"github.com/wolf-joe/ts-dns/cache"
+	"math"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -48,4 +50,48 @@ func pingRtt(ip string) (rtt int64) {
 		return stat.AvgRtt.Milliseconds()
 	}
 	return MaxRtt + 1
+}
+
+// 从dns msg chan中找出ping值最低的ipv4地址并将其所属的A记录打包返回
+func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
+	aLock, rttLock, wg := new(sync.Mutex), new(sync.Mutex), new(sync.WaitGroup)
+	aMap, rttMap := map[string]*dns.A{}, map[string]int64{}
+	for i := 0; i < chLen; i++ {
+		msg := <-ch // 从chan中取出一个msg
+		if msg != nil {
+			res = msg // 防止被最后出现的nil覆盖
+		}
+		for _, a := range extractA(msg) {
+			ipv4 := a.A.String()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				aLock.Lock()
+				if _, ok := aMap[ipv4]; ok { // 防止重复ping
+					aLock.Unlock()
+					return
+				}
+				aMap[ipv4] = a
+				aLock.Unlock()
+				// 并发测速
+				rtt := pingRtt(ipv4)
+				rttLock.Lock()
+				rttMap[ipv4] = rtt
+				rttLock.Unlock()
+			}()
+		}
+	}
+	wg.Wait()
+	// 查找ping最小的ipv4地址
+	lowestRtt, fastestIP := int64(math.MaxInt64), ""
+	for ipv4, rtt := range rttMap {
+		if rtt < MaxRtt && rtt < lowestRtt {
+			lowestRtt, fastestIP = rtt, ipv4
+		}
+	}
+	// 用ping最小的ipv4地址覆盖msg
+	if fastestIP != "" && res != nil {
+		res.Answer = []dns.RR{aMap[fastestIP]}
+	}
+	return
 }
