@@ -11,7 +11,8 @@
 ## 基本特性
 
 * 默认基于`CN IP列表` + `GFWList`进行域名分组；
-* 支持DNS over UDP/TCP/TLS/HTTP；
+* 支持DNS over UDP/TCP/TLS/HTTPS、非标准端口DNS；
+* 支持选择ping值最低的IPv4地址；
 * 支持并发请求/socks5代理请求上游DNS；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；
@@ -56,7 +57,16 @@
     dns = [""]  # 省略
   ```
 
-2. 指定hosts文件和自定义hosts
+2. 选择ping值最低的IPv4地址（启用时建议以root权限运行本程序）：
+  ```toml
+  # ...
+  [groups.clean]
+    dns = ["119.29.29.29", "223.5.5.5", "114.114.114.114"]
+    fastest_v4 = true
+  # ...
+  ```
+
+3. 指定hosts文件和自定义hosts
   ```toml
   # ...
   hosts_files = ["adaway.txt"]
@@ -65,7 +75,7 @@
   # ...
   ```
 
-3. 使用socks5代理转发DNS请求
+4. 使用socks5代理转发DNS请求
   ```toml
   # ...
     [groups.dirty]
@@ -73,7 +83,7 @@
     # ...
   ```
 
-4. 自定义域名分组
+5. 自定义域名分组
   ```toml
   # ...
     [groups.work]
@@ -94,7 +104,6 @@
 
 ## TODO
 
-* ping测速择优
 * 完善单元测试
 * 设置fallback DNS
 * 使用ECS转发DNS请求
