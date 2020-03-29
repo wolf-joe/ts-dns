@@ -112,7 +112,7 @@ func TestDoHCaller(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, caller.Servers[0], "1.1.1.1")
 	// 测试DialContext
-	_, err = caller.client.Transport.(*http.Transport).DialContext(nil, "", "")
+	_, _ = caller.client.Transport.(*http.Transport).DialContext(nil, "", "")
 
 	// 测试.Call
 	caller.Servers = []string{}

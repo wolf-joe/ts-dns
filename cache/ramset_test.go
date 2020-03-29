@@ -11,7 +11,7 @@ import (
 func TestRamSet(t *testing.T) {
 	text := "  1.2.4.8  \n 8.8.8.8 \n 1.0.0.0/8 \n  192.168.1.1/33 \n ::1 \n ::2 "
 	filename := "go_test_ips_file"
-	err := ioutil.WriteFile(filename, []byte(text), 0644)
+	_ = ioutil.WriteFile(filename, []byte(text), 0644)
 	// 读取失败
 	matcher, err := NewRamSetByFile(filename + "_ne")
 	assert.True(t, err != nil)

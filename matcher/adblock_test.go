@@ -42,16 +42,16 @@ func TestNewChecker(t *testing.T) {
 	_ = os.Remove(filename)
 
 	// 判断空串
-	matched, ok := matcher.Match("")
+	_, ok := matcher.Match("")
 	assert.Equal(t, ok, false)
 	// 规则.abc.com不匹配abc.com
-	matched, ok = matcher.Match("abc.com")
+	_, ok = matcher.Match("abc.com")
 	assert.Equal(t, ok, false)
 	// 但匹配test.abc.com
-	matched, ok = matcher.Match("test.abc.com")
+	_, ok = matcher.Match("test.abc.com")
 	assert.Equal(t, ok, true)
 	// 匹配白名单@@||cip.cc
-	matched, ok = matcher.Match("cip.cc.")
+	matched, ok := matcher.Match("cip.cc.")
 	assert.Equal(t, ok, true)
 	assert.Equal(t, matched, false)
 	// 匹配白名单@@||*.cn
