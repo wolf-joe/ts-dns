@@ -72,6 +72,7 @@ func autoReload(handle *inbound.Handler, filename string) {
 			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
 				log.WithFields(fields).Warnf("file changed, reloading")
 				if newHandler, err := conf.NewHandler(filename); err == nil {
+					newHandler.ResolveDoH()
 					handle.Refresh(newHandler)
 				}
 			}
