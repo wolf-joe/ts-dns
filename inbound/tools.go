@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const MaxRtt = 500
+const maxRtt = 500
 
 // 提取dns响应中的A记录列表
 func extractA(r *dns.Msg) (records []*dns.A) {
@@ -40,16 +40,16 @@ func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
 func pingRtt(ip string) (rtt int64) {
 	task, err := ping.NewPinger(ip)
 	if err != nil {
-		return MaxRtt + 1
+		return maxRtt + 1
 	}
-	task.Count, task.Timeout = 1, time.Millisecond*MaxRtt
+	task.Count, task.Timeout = 1, time.Millisecond*maxRtt
 	task.SetPrivileged(true)
 	task.Run()
 	stat := task.Statistics()
 	if stat.PacketsRecv >= 1 {
 		return stat.AvgRtt.Milliseconds()
 	}
-	return MaxRtt + 1
+	return maxRtt + 1
 }
 
 // 从dns msg chan中找出ping值最低的ipv4地址并将其所属的A记录打包返回
@@ -85,7 +85,7 @@ func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
 	// 查找ping最小的ipv4地址
 	lowestRtt, fastestIP := int64(math.MaxInt64), ""
 	for ipv4, rtt := range rttMap {
-		if rtt < MaxRtt && rtt < lowestRtt {
+		if rtt < maxRtt && rtt < lowestRtt {
 			lowestRtt, fastestIP = rtt, ipv4
 		}
 	}

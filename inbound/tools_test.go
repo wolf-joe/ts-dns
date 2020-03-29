@@ -17,14 +17,14 @@ func TestTools(t *testing.T) {
 	assert.False(t, allInRange(resp, cache.NewRamSetByText("")))
 	assert.True(t, allInRange(resp, cache.NewRamSetByText("1.1.1.1")))
 
-	assert.True(t, pingRtt("") > MaxRtt)
-	assert.True(t, pingRtt("111") > MaxRtt)
+	assert.True(t, pingRtt("") > maxRtt)
+	assert.True(t, pingRtt("111") > maxRtt)
 	mocker := mock.NewMocker()
 	defer mocker.Reset()
 	mocker.MethodSeq(&ping.Pinger{}, "Statistics", []gomonkey.Params{
-		{&ping.Statistics{PacketsRecv: 1, AvgRtt: MaxRtt - 1}},
+		{&ping.Statistics{PacketsRecv: 1, AvgRtt: maxRtt - 1}},
 	})
-	assert.True(t, pingRtt("1.1.1.1") < MaxRtt)
+	assert.True(t, pingRtt("1.1.1.1") < maxRtt)
 }
 
 func TestTools_FastestA(t *testing.T) {
@@ -32,9 +32,8 @@ func TestTools_FastestA(t *testing.T) {
 	gomonkey.ApplyFunc(pingRtt, func(ip string) int64 {
 		if ip == "1.1.1.1" {
 			return 100
-		} else {
-			return 200
 		}
+		return 200
 	})
 
 	chLen := 4

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// 基于部分AdBlock Plus规则的域名匹配器
+// ABPlus 基于部分AdBlock Plus规则的域名匹配器
 type ABPlus struct {
 	DomainMatcher
 	isBlocked     map[string]bool
@@ -15,7 +15,7 @@ type ABPlus struct {
 	unblockedRegs []*regexp.Regexp
 }
 
-// 判断域名是否匹配ADBlock Plus规则
+// Match 判断域名是否匹配ADBlock Plus规则
 func (matcher *ABPlus) Match(domain string) (matched bool, ok bool) {
 	if domain == "" {
 		return
@@ -49,7 +49,7 @@ func (matcher *ABPlus) Match(domain string) (matched bool, ok bool) {
 	return false, false
 }
 
-// 从文本内容读取AdBlock Plus规则
+// NewABPByText 从文本内容读取AdBlock Plus规则
 func NewABPByText(text string) (matcher *ABPlus) {
 	extractDomain := func(rule string) string {
 		// 从ABP规则中提取域名
@@ -111,7 +111,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 	return matcher
 }
 
-// 从文件内容读取AdBlock Plus规则
+// NewABPByFile 从文件内容读取AdBlock Plus规则
 func NewABPByFile(filename string, b64decode bool) (checker *ABPlus, err error) {
 	var raw []byte
 	var text string

@@ -5,12 +5,12 @@ import (
 	"reflect"
 )
 
-// gomonkey的封装
+// Mocker gomonkey的封装
 type Mocker struct {
 	patches []*gomonkey.Patches
 }
 
-// gomonkey.ApplyFuncSeq的封装
+// FuncSeq gomonkey.ApplyFuncSeq的封装
 func (m *Mocker) FuncSeq(target interface{}, outputs []gomonkey.Params) {
 	var cells []gomonkey.OutputCell
 	for _, output := range outputs {
@@ -19,7 +19,7 @@ func (m *Mocker) FuncSeq(target interface{}, outputs []gomonkey.Params) {
 	m.patches = append(m.patches, gomonkey.ApplyFuncSeq(target, cells))
 }
 
-// gomonkey.ApplyMethodSeq的封装
+// MethodSeq gomonkey.ApplyMethodSeq的封装
 func (m *Mocker) MethodSeq(target interface{}, method string, outputs []gomonkey.Params) {
 	var cells []gomonkey.OutputCell
 	for _, output := range outputs {
@@ -29,7 +29,7 @@ func (m *Mocker) MethodSeq(target interface{}, method string, outputs []gomonkey
 	m.patches = append(m.patches, p)
 }
 
-// Reset所有mock
+// Reset 重置所有mock
 func (m *Mocker) Reset() {
 	for _, patches := range m.patches {
 		patches.Reset()
@@ -37,6 +37,7 @@ func (m *Mocker) Reset() {
 	m.patches = []*gomonkey.Patches{}
 }
 
+// NewMocker 新建一个Mocker
 func NewMocker() *Mocker {
 	return &Mocker{patches: []*gomonkey.Patches{}}
 }
