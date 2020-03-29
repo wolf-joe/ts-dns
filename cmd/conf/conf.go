@@ -11,6 +11,8 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
+	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -93,12 +95,36 @@ type Cache struct {
 	MaxTTL int `toml:"max_ttl"`
 }
 
+// QueryLog 配置文件中query_log section对应的结构
+type QueryLog struct {
+	File string
+	//IgnoreQTypes []string `toml:"ignore_qtypes"`
+	//IgnoreHosts  bool     `toml:"ignore_hosts"`
+	//IgnoreCache  bool     `toml:"ignore_cache"`
+}
+
+// GenLogger 读取logger配置并打包成Logger对象
+func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
+	logger = log.New()
+	if conf.File == "/dev/null" {
+		logger.SetOutput(ioutil.Discard)
+	} else if conf.File != "" {
+		file, err := os.OpenFile(conf.File, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, err
+		}
+		logger.SetOutput(file)
+	}
+	return logger, nil
+}
+
 // Conf 配置文件总体结构
 type Conf struct {
 	Listen     string
 	GFWList    string
 	CNIP       string
-	HostsFiles []string `toml:"hosts_files"`
+	Logger     *QueryLog `toml:"query_log"`
+	HostsFiles []string  `toml:"hosts_files"`
 	Hosts      map[string]string
 	Cache      *Cache
 	Groups     map[string]*Group
@@ -182,14 +208,14 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
 func NewHandler(filename string) (handler *inbound.Handler, err error) {
-	config := Conf{Cache: &Cache{}}
+	config := Conf{Cache: &Cache{}, Logger: &QueryLog{}}
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		log.WithField("file", filename).Errorf("read config error: %v", err)
 		return nil, err
 	}
 	config.SetDefault()
 	// 初始化handler
-	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, QueryLogger: log.New()}
+	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
@@ -207,6 +233,11 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	handler.HostsReaders = config.GenHostsReader()
 	handler.Cache = config.GenCache()
+	// 读取Logger
+	if handler.QueryLogger, err = config.Logger.GenLogger(); err != nil {
+		log.Errorf("create query logger error: %v", err)
+		return nil, err
+	}
 	// 检测配置有效性
 	if !handler.IsValid() {
 		return nil, fmt.Errorf("")

@@ -10,6 +10,9 @@ hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 "example.com" = "8.8.8.8"
 "cloudflare-dns.com" = "1.0.0.1"  # 防止下文提到的DoH递归解析
 
+[query_log]
+file = "/dev/null"  # dns请求日志文件，值为/dev/null时不记录，值为空时记录到stdout
+
 [cache]  # dns缓存配置
 size = 4096  # 缓存大小，为负数时禁用缓存
 min_ttl = 60  # 最小ttl，单位为秒

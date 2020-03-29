@@ -10,8 +10,31 @@ import (
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/mock"
+	"os"
 	"testing"
 )
+
+func TestQueryLog(t *testing.T) {
+	logConf := QueryLog{File: "/dev/null"}
+	log, err := logConf.GenLogger()
+	assert.NotNil(t, log)
+	assert.Nil(t, err)
+
+	mocker := mock.NewMocker()
+	defer mocker.Reset()
+
+	logConf.File = "aaa"
+	mocker.FuncSeq(os.OpenFile, []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {&os.File{}, nil},
+	})
+	log, err = logConf.GenLogger()
+	assert.Nil(t, log)
+	assert.NotNil(t, err)
+
+	log, err = logConf.GenLogger()
+	assert.NotNil(t, log)
+	assert.Nil(t, err)
+}
 
 func TestGroup(t *testing.T) {
 	mocker := mock.NewMocker()
@@ -87,28 +110,35 @@ func TestNewHandler(t *testing.T) {
 
 	mocker.FuncSeq(toml.DecodeFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
-		{nil, nil}, {nil, nil},
+		{nil, nil}, {nil, nil}, {nil, nil},
 	})
 	handler, err := NewHandler("") // DecodeFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.FuncSeq(matcher.NewABPByFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
-		{nil, nil},
+		{nil, nil}, {nil, nil},
 	})
 	handler, err = NewHandler("") // NewABPByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.FuncSeq(cache.NewRamSetByFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
+		{nil, nil},
 	})
 	handler, err = NewHandler("") // NewRamSetByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.MethodSeq(&Conf{}, "GenGroups", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil},
+		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
 	})
 	handler, err = NewHandler("") // GenGroups失败
+	assert.Nil(t, handler)
+	assert.NotNil(t, err)
+	mocker.MethodSeq(&QueryLog{}, "GenLogger", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil},
+	})
+	handler, err = NewHandler("") // GenLogger失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.MethodSeq(&Conf{}, "GenCache", []gomonkey.Params{{nil}, {nil}})
