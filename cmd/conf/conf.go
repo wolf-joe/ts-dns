@@ -189,7 +189,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	config.SetDefault()
 	// 初始化handler
-	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen}
+	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, QueryLogger: log.New()}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)

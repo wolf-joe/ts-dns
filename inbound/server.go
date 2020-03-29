@@ -8,6 +8,7 @@ import (
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
+	"strings"
 	"sync"
 )
 
@@ -79,6 +80,7 @@ type Handler struct {
 	CNIP         *cache.RamSet
 	HostsReaders []hosts.Reader
 	Groups       map[string]*Group
+	QueryLogger  *log.Logger
 }
 
 // HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
@@ -106,6 +108,17 @@ func (handler *Handler) HitHosts(request *dns.Msg) *dns.Msg {
 	return nil
 }
 
+// LogQuery 记录请求日志
+func (handler *Handler) LogQuery(resp dns.ResponseWriter, question dns.Question, msg, group string) {
+	fields := log.Fields{"domain": question.Name, "type": dns.Type(question.Qtype).String()}
+	src := resp.RemoteAddr().String()
+	fields["src"] = src[:strings.LastIndex(src, ":")]
+	if group != "" {
+		fields["group"] = group
+	}
+	handler.QueryLogger.WithFields(fields).Info(msg)
+}
+
 // ServeDNS 处理dns请求，程序核心函数
 func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	handler.Mux.RLock() // 申请读锁，持续整个请求
@@ -124,16 +137,14 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}()
 
 	question := request.Question[0]
-	fields := log.Fields{"domain": question.Name, "src": resp.RemoteAddr()}
-	fields["type"] = dns.Type(question.Qtype).String()
 	// 检测是否命中hosts
 	if r = handler.HitHosts(request); r != nil {
-		log.WithFields(fields).Infof("hit hosts")
+		handler.LogQuery(resp, question, "hit hosts", "")
 		return
 	}
 	// 检测是否命中dns缓存
 	if r = handler.Cache.Get(request); r != nil {
-		log.WithFields(fields).Infof("hit cache")
+		handler.LogQuery(resp, question, "hit cache", "")
 		return
 	}
 
@@ -141,8 +152,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var name string
 	for name, group = range handler.Groups {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
-			fields["group"] = name
-			log.WithFields(fields).Infof("match by rules")
+			handler.LogQuery(resp, question, "match by rules", name)
 			r = group.CallDNS(request)
 			// 设置dns缓存
 			handler.Cache.Set(request, r)
@@ -150,19 +160,17 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		}
 	}
 	// 先用clean组dns解析
-	fields["group"], group = "clean", handler.Groups["clean"]
-	r = group.CallDNS(request)
+	r = handler.Groups["clean"].CallDNS(request)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
-		log.WithFields(fields).Infof("cn/empty ipv4")
+		handler.LogQuery(resp, question, "cn/empty ipv4", "clean")
 	} else if blocked, ok := handler.GFWMatcher.Match(question.Name); !ok || !blocked {
 		// 出现非cn ip但域名不匹配gfwlist，流程结束
-		log.WithFields(fields).Infof("not match gfwlist")
+		handler.LogQuery(resp, question, "not match gfwlist", "clean")
 	} else {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
-		fields["group"], group = "dirty", handler.Groups["dirty"]
-		log.WithFields(fields).Infof("match gfwlist")
-		r = group.CallDNS(request)
+		handler.LogQuery(resp, question, "match gfwlist", "dirty")
+		r = handler.Groups["dirty"].CallDNS(request)
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)

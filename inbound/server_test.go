@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
@@ -31,7 +32,7 @@ func (r *MockRespWriter) Close() error {
 }
 
 func (r *MockRespWriter) RemoteAddr() net.Addr {
-	return &net.IPNet{}
+	return &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 11111}
 }
 
 func TestHandler_Resolve(t *testing.T) {
@@ -65,7 +66,7 @@ func TestHandler(t *testing.T) {
 	// 初始化handler
 	handler := &Handler{Mux: new(sync.RWMutex), Cache: cache.NewDNSCache(0, 0, 0),
 		GFWMatcher: matcher.NewABPByText(""), CNIP: cache.NewRamSetByText(""),
-		HostsReaders: []hosts.Reader{hosts.NewReaderByText("")},
+		HostsReaders: []hosts.Reader{hosts.NewReaderByText("")}, QueryLogger: log.New(),
 	}
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
