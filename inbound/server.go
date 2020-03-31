@@ -75,6 +75,7 @@ func (group *Group) AddIPSet(r *dns.Msg) {
 type Handler struct {
 	Mux          *sync.RWMutex
 	Listen       string
+	DisableIPv6  bool
 	Cache        *cache.DNSCache
 	GFWMatcher   *matcher.ABPlus
 	CNIP         *cache.RamSet
@@ -137,6 +138,10 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}()
 
 	question := request.Question[0]
+	if handler.DisableIPv6 && question.Qtype == dns.TypeAAAA {
+		r = &dns.Msg{}
+		return // 禁用IPv6时直接返回
+	}
 	// 检测是否命中hosts
 	if r = handler.HitHosts(request); r != nil {
 		handler.LogQuery(resp, question, "hit hosts", "")
@@ -231,6 +236,10 @@ func (handler *Handler) Refresh(target *Handler) {
 	if target.Groups != nil {
 		handler.Groups = target.Groups
 	}
+	if target.QueryLogger != nil {
+		handler.QueryLogger = target.QueryLogger
+	}
+	handler.DisableIPv6 = target.DisableIPv6
 }
 
 // IsValid 判断Handler是否符合运行条件

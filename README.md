@@ -16,8 +16,9 @@
 * 支持并发请求/socks5代理请求上游DNS；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；
-* 支持DNS查询缓存（TTL倒计时、ECS缓存）；
-* 支持将查询结果添加至IPSet。
+* 支持DNS查询缓存（IP乱序、TTL倒计时、ECS）；
+* 支持禁用IPv6解析；
+* 支持将查询结果中的IPv4地址添加至IPSet。
 
 ## DNS查询请求处理流程
 
@@ -104,7 +105,6 @@
 
 ## TODO
 
-* 理清ipv4/ipv6支持
 * 完善日志记录
 * 设置fallback DNS
 * 使用ECS转发DNS请求

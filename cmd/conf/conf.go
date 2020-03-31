@@ -120,14 +120,15 @@ func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
 
 // Conf 配置文件总体结构
 type Conf struct {
-	Listen     string
-	GFWList    string
-	CNIP       string
-	Logger     *QueryLog `toml:"query_log"`
-	HostsFiles []string  `toml:"hosts_files"`
-	Hosts      map[string]string
-	Cache      *Cache
-	Groups     map[string]*Group
+	Listen      string
+	GFWList     string
+	CNIP        string
+	Logger      *QueryLog `toml:"query_log"`
+	HostsFiles  []string  `toml:"hosts_files"`
+	Hosts       map[string]string
+	Cache       *Cache
+	Groups      map[string]*Group
+	DisableIPv6 bool `toml:"disable_ipv6"`
 }
 
 // SetDefault 为部分字段默认配置
@@ -216,6 +217,10 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	config.SetDefault()
 	// 初始化handler
 	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen}
+	handler.DisableIPv6 = config.DisableIPv6
+	if handler.DisableIPv6 {
+		log.Warn("disable ipv6 resolve")
+	}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)

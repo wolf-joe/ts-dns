@@ -74,6 +74,14 @@ func TestHandler(t *testing.T) {
 	// 初始化所需参数和返回值
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.ParseIP("1.1.1.1")}}}
 	writer, req := &MockRespWriter{}, &dns.Msg{}
+	req.SetQuestion("ip.cn.", dns.TypeAAAA)
+
+	// 测试DisableIPv6
+	handler.DisableIPv6 = true
+	handler.ServeDNS(writer, req)
+	assert.NotNil(t, writer.r)
+	assert.Equal(t, len(writer.r.Answer), 0)
+
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
 	mocker := mock.NewMocker()

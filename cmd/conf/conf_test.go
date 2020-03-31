@@ -109,12 +109,19 @@ func TestNewHandler(t *testing.T) {
 	defer mocker.Reset()
 
 	mocker.FuncSeq(toml.DecodeFile, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
-		{nil, nil}, {nil, nil}, {nil, nil},
+		{nil, fmt.Errorf("err")},
 	})
 	handler, err := NewHandler("") // DecodeFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
+
+	p := gomonkey.ApplyFunc(toml.DecodeFile,
+		func(fn string, conf interface{}) (toml.MetaData, error) {
+			conf.(*Conf).DisableIPv6 = true
+			return toml.MetaData{}, nil
+		})
+	defer p.Reset()
+
 	mocker.FuncSeq(matcher.NewABPByFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
 		{nil, nil}, {nil, nil},
