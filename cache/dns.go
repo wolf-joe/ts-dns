@@ -45,8 +45,21 @@ func (entry *cacheEntry) Get() *dns.Msg {
 		return nil
 	}
 	r := entry.r.Copy()
-	for i := 0; i < len(r.Answer); i++ {
+	for i := 0; i < len(r.Answer); i++ { // 倒计时ttl
 		r.Answer[i].Header().Ttl = uint32(ttl)
+	}
+	first := -1 // 打乱ip响应顺序
+	for i := len(r.Answer) - 1; i >= 0; i-- {
+		if t := r.Answer[i].Header().Rrtype; t != dns.TypeA && t != dns.TypeAAAA {
+			break
+		}
+		first = i
+	}
+	if first >= 0 {
+		rand.Seed(time.Now().UnixNano()) // random record order
+		rand.Shuffle(len(r.Answer)-first, func(i, j int) {
+			r.Answer[first+i], r.Answer[first+j] = r.Answer[first+j], r.Answer[first+i]
+		})
 	}
 	return r
 }
@@ -60,10 +73,6 @@ func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 	}
 	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
 		r := cacheHit.(*cacheEntry).Get()
-		rand.Seed(time.Now().UnixNano()) // random record order
-		rand.Shuffle(len(r.Answer), func(i, j int) {
-			r.Answer[i], r.Answer[j] = r.Answer[j], r.Answer[i]
-		})
 		return r
 	}
 	return nil

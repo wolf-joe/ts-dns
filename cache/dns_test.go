@@ -47,9 +47,10 @@ func TestGetDNSCache(t *testing.T) {
 }
 
 func TestTTLRewrite(t *testing.T) {
+	rr0, _ := dns.NewRR("ip.cn. 0 IN CNAME xxx")
 	rr1, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.1")
 	rr2, _ := dns.NewRR("ip.cn. 0 IN A 1.1.1.2")
-	req, resp := &dns.Msg{}, &dns.Msg{Answer: []dns.RR{rr1, rr2}}
+	req, resp := &dns.Msg{}, &dns.Msg{Answer: []dns.RR{rr0, rr1, rr2}}
 	req.SetQuestion("ip.cn.", dns.TypeA)
 	cache := NewDNSCache(1, time.Minute, time.Hour*24)
 	cache.Set(req, resp)
