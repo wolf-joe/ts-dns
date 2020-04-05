@@ -14,11 +14,12 @@ import (
 
 // Group 各域名组相关配置
 type Group struct {
-	Callers    []outbound.Caller
-	Matcher    *matcher.ABPlus
-	IPSet      *ipset.IPSet
-	Concurrent bool
-	FastestV4  bool
+	Callers     []outbound.Caller
+	Matcher     *matcher.ABPlus
+	IPSet       *ipset.IPSet
+	Concurrent  bool
+	FastestV4   bool
+	TcpPingPort int
 }
 
 // CallDNS 向组内的dns服务器转发请求
@@ -53,7 +54,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 			}
 		}
 	} else if group.FastestV4 { // 选择ping值最低的IPv4地址作为返回值
-		return fastestA(ch, len(group.Callers))
+		return fastestA(ch, len(group.Callers), group.TcpPingPort)
 	}
 	return nil
 }

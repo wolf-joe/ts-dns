@@ -1,11 +1,13 @@
 package inbound
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"github.com/sparrc/go-ping"
 	"github.com/wolf-joe/ts-dns/cache"
 	"math"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -36,8 +38,19 @@ func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
 	return true
 }
 
-// 获取到目标ip的ping值（毫秒）
-func pingRtt(ip string) (rtt int64) {
+// 获取到目标ip的ping值（毫秒），当tcpPort大于0时使用tcp ping，否则使用icmp ping
+func pingRtt(ip string, tcpPort int) (rtt int64) {
+	if tcpPort > 0 { // 使用tcp ping
+		begin, addr := time.Now(), ip+":"+strconv.Itoa(tcpPort)
+		conn, err := net.DialTimeout("tcp", addr, time.Millisecond*maxRtt)
+		if err != nil {
+			return maxRtt + 1
+		}
+		defer func() { _ = conn.Close() }()
+		rtt = time.Now().Sub(begin).Milliseconds()
+		return rtt
+	}
+	// 使用icmp ping
 	task, err := ping.NewPinger(ip)
 	if err != nil {
 		return maxRtt + 1
@@ -53,9 +66,9 @@ func pingRtt(ip string) (rtt int64) {
 }
 
 // 从dns msg chan中找出ping值最低的ipv4地址并将其所属的A记录打包返回
-func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
+func fastestA(ch chan *dns.Msg, chLen int, tcpPort int) (res *dns.Msg) {
 	aLock, rttLock, wg := new(sync.Mutex), new(sync.Mutex), new(sync.WaitGroup)
-	aMap, rttMap := map[string]*dns.A{}, map[string]int64{}
+	aMap, rttMap := map[string]dns.A{}, map[string]int64{}
 	for i := 0; i < chLen; i++ {
 		msg := <-ch // 从chan中取出一个msg
 		if msg != nil {
@@ -74,7 +87,7 @@ func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
 				aMap[ipv4] = aObj
 				aLock.Unlock()
 				// 并发测速
-				rtt := pingRtt(ipv4)
+				rtt := pingRtt(ipv4, tcpPort)
 				rttLock.Lock()
 				rttMap[ipv4] = rtt
 				rttLock.Unlock()
