@@ -105,7 +105,6 @@
 
 ## TODO
 
-* 完善日志记录
 * 设置fallback DNS
 * 使用ECS转发DNS请求
 
