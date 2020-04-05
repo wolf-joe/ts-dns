@@ -62,7 +62,7 @@ func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
 			res = msg // 防止被最后出现的nil覆盖
 		}
 		for _, a := range extractA(msg) {
-			ipv4 := a.A.String()
+			ipv4, aObj := a.A.String(), *a // 用aObj实体变量来防止aMap的键值不一致
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -71,7 +71,7 @@ func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
 					aLock.Unlock()
 					return
 				}
-				aMap[ipv4] = a
+				aMap[ipv4] = aObj
 				aLock.Unlock()
 				// 并发测速
 				rtt := pingRtt(ipv4)
@@ -90,8 +90,10 @@ func fastestA(ch chan *dns.Msg, chLen int) (res *dns.Msg) {
 		}
 	}
 	// 用ping最小的ipv4地址覆盖msg
-	if fastestIP != "" && res != nil {
-		res.Answer = []dns.RR{aMap[fastestIP]}
+	if aObj := aMap[fastestIP]; fastestIP != "" && res != nil {
+		res.Answer = []dns.RR{&aObj}
+	} else {
+		log.Error("find fastest ipv4 failed")
 	}
 	return
 }
