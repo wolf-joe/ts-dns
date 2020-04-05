@@ -12,7 +12,7 @@
 
 * 默认基于`CN IP列表` + `GFWList`进行域名分组；
 * 支持DNS over UDP/TCP/TLS/HTTPS、非标准端口DNS；
-* 支持选择ping值最低的IPv4地址；
+* 支持选择ping值最低的IPv4地址（tcp/icmp ping）；
 * 支持并发请求/socks5代理请求上游DNS；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；

@@ -45,15 +45,16 @@ func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
-	Socks5     string
-	IPSet      string
-	IPSetTTL   int `toml:"ipset_ttl"`
-	DNS        []string
-	DoT        []string
-	DoH        []string
-	Concurrent bool
-	FastestV4  bool `toml:"fastest_v4"`
-	Rules      []string
+	Socks5      string
+	IPSet       string
+	IPSetTTL    int `toml:"ipset_ttl"`
+	DNS         []string
+	DoT         []string
+	DoH         []string
+	Concurrent  bool
+	FastestV4   bool `toml:"fastest_v4"`
+	TCPPingPort int  `toml:"tcp_ping_port"`
+	Rules       []string
 }
 
 // GenIPSet 读取ipset配置并打包成IPSet对象
@@ -215,13 +216,14 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 	// 读取每个域名组的配置信息
 	for name, group := range conf.Groups {
 		inboundGroup := &inbound.Group{
-			Callers: group.GenCallers(), Concurrent: group.Concurrent, FastestV4: group.FastestV4,
+			Callers: group.GenCallers(), Concurrent: group.Concurrent,
+			FastestV4: group.FastestV4, TcpPingPort: group.TCPPingPort,
 		}
 		if inboundGroup.Concurrent {
 			log.Warnln("enable concurrent dns in group " + name)
 		}
 		if inboundGroup.FastestV4 {
-			log.Warnln("enable fastest ipv4 in group " + name)
+			log.Warnln("find fastest ipv4 in group " + name)
 		}
 		// 读取匹配规则
 		inboundGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
