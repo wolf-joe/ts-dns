@@ -13,6 +13,9 @@ hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 
 [query_log]
 file = "/dev/null"  # dns请求日志文件，值为/dev/null时不记录，值为空时记录到stdout
+ignore_qtypes = ["DNSKEY", "NS"]  # 不记录指定类型的dns请求
+ignore_cache = true  # 不记录命中缓存的dns请求
+ignore_hosts = true  # 不记录命中hosts的dns请求
 
 [cache]  # dns缓存配置
 size = 4096  # 缓存大小，为负数时禁用缓存

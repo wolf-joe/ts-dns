@@ -1,8 +1,10 @@
 package conf
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +18,8 @@ import (
 
 func TestQueryLog(t *testing.T) {
 	logConf := QueryLog{File: "/dev/null"}
-	log, err := logConf.GenLogger()
-	assert.NotNil(t, log)
+	logger, err := logConf.GenLogger()
+	assert.NotNil(t, logger)
 	assert.Nil(t, err)
 
 	mocker := mock.NewMocker()
@@ -27,12 +29,12 @@ func TestQueryLog(t *testing.T) {
 	mocker.FuncSeq(os.OpenFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&os.File{}, nil},
 	})
-	log, err = logConf.GenLogger()
-	assert.Nil(t, log)
+	logger, err = logConf.GenLogger()
+	assert.Nil(t, logger)
 	assert.NotNil(t, err)
 
-	log, err = logConf.GenLogger()
-	assert.NotNil(t, log)
+	logger, err = logConf.GenLogger()
+	assert.NotNil(t, logger)
 	assert.Nil(t, err)
 }
 
@@ -156,4 +158,29 @@ func TestNewHandler(t *testing.T) {
 	handler, err = NewHandler("") // 验证配置成功
 	assert.NotNil(t, handler)
 	assert.Nil(t, err)
+}
+
+func TestQueryFormatter(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := log.New()
+	logger.SetOutput(&buffer)
+	logger.SetFormatter(&queryFormatter{
+		ignoreQTypes: []string{"A", "NS"}, ignoreHosts: true, ignoreCache: true,
+	})
+	// 测试ignoreQTypes
+	fields := log.Fields{"domain": "ip.cn.", "type": "A"}
+	logger.WithFields(fields).Info("msg")
+	fields["type"] = "NS"
+	logger.WithFields(fields).Info("msg")
+	assert.Empty(t, buffer.String())
+	fields["type"] = "PTR"
+	logger.WithFields(fields).Info("msg")
+	assert.NotEmpty(t, buffer.String())
+	// 测试ignoreHosts
+	buffer.Reset()
+	logger.WithFields(fields).Info("hit hosts")
+	assert.Empty(t, buffer.String())
+	// 测试ignoreCache
+	logger.WithFields(fields).Info("hit cache")
+	assert.Empty(t, buffer.String())
 }

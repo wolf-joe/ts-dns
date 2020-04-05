@@ -18,6 +18,31 @@ import (
 	"time"
 )
 
+// 自定义查询日志的输出格式
+type queryFormatter struct {
+	log.TextFormatter
+	ignoreQTypes []string
+	ignoreHosts  bool
+	ignoreCache  bool
+}
+
+// 和inbound/server.go中Handler.LogQuery的行为强关联
+func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
+	var ignore []byte
+	for _, qType := range f.ignoreQTypes {
+		if entry.Data["type"] == qType {
+			return ignore, nil
+		}
+	}
+	if f.ignoreHosts && entry.Message == "hit hosts" {
+		return ignore, nil
+	}
+	if f.ignoreCache && entry.Message == "hit cache" {
+		return ignore, nil
+	}
+	return f.TextFormatter.Format(entry)
+}
+
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
 	Socks5     string
@@ -97,10 +122,10 @@ type Cache struct {
 
 // QueryLog 配置文件中query_log section对应的结构
 type QueryLog struct {
-	File string
-	//IgnoreQTypes []string `toml:"ignore_qtypes"`
-	//IgnoreHosts  bool     `toml:"ignore_hosts"`
-	//IgnoreCache  bool     `toml:"ignore_cache"`
+	File         string
+	IgnoreQTypes []string `toml:"ignore_qtypes"`
+	IgnoreHosts  bool     `toml:"ignore_hosts"`
+	IgnoreCache  bool     `toml:"ignore_cache"`
 }
 
 // GenLogger 读取logger配置并打包成Logger对象
@@ -115,6 +140,8 @@ func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
 		}
 		logger.SetOutput(file)
 	}
+	logger.SetFormatter(&queryFormatter{ignoreQTypes: conf.IgnoreQTypes,
+		ignoreHosts: conf.IgnoreHosts, ignoreCache: conf.IgnoreCache})
 	return logger, nil
 }
 
