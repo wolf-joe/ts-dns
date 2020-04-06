@@ -19,7 +19,7 @@ type Group struct {
 	IPSet       *ipset.IPSet
 	Concurrent  bool
 	FastestV4   bool
-	TcpPingPort int
+	TCPPingPort int
 }
 
 // CallDNS 向组内的dns服务器转发请求
@@ -54,7 +54,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 			}
 		}
 	} else if group.FastestV4 { // 选择ping值最低的IPv4地址作为返回值
-		return fastestA(ch, len(group.Callers), group.TcpPingPort)
+		return fastestA(ch, len(group.Callers), group.TCPPingPort)
 	}
 	return nil
 }
