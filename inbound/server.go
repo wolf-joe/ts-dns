@@ -166,7 +166,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 		}
 	}
 	// 先用clean组dns解析
-	r = handler.Groups["clean"].CallDNS(request)
+	group = handler.Groups["clean"] // 设置group变量以在defer里添加ipset
+	r = group.CallDNS(request)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
 		handler.LogQuery(resp, question, "cn/empty ipv4", "clean")
@@ -176,7 +177,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	} else {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
 		handler.LogQuery(resp, question, "match gfwlist", "dirty")
-		r = handler.Groups["dirty"].CallDNS(request)
+		group = handler.Groups["dirty"] // 设置group变量以在defer里添加ipset
+		r = group.CallDNS(request)
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)
