@@ -127,10 +127,11 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var r *dns.Msg
 	var group *Group
 	defer func() {
-		if r != nil {
-			r.SetReply(request) // 写入响应
-			_ = resp.WriteMsg(r)
+		if r == nil {
+			r = &dns.Msg{}
 		}
+		r.SetReply(request) // 写入响应
+		_ = resp.WriteMsg(r)
 		if group != nil {
 			group.AddIPSet(r) // 写入IPSet
 		}
