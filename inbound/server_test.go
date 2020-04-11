@@ -98,21 +98,21 @@ func TestHandler(t *testing.T) {
 	// 测试ServeDNS前半部分
 	// mock HitHosts
 	mocker.MethodSeq(handler, "HitHosts", []gomonkey.Params{
-		{resp}, {nil}, {nil}, // 前半部分用
+		{resp}, {nil}, {nil}, {nil}, // 前半部分用
 		{nil}, {nil}, {nil},
 	})
 	handler.ServeDNS(writer, req) // 命中hosts
 	assert.Equal(t, writer.r, resp)
 	// mock缓存
 	mocker.MethodSeq(handler.Cache, "Get", []gomonkey.Params{
-		{resp}, {nil}, // 前半部分用
+		{resp}, {nil}, {nil}, // 前半部分用
 		{nil}, {nil}, {nil},
 	})
 	handler.ServeDNS(writer, req) // 命中缓存
 	assert.Equal(t, writer.r, resp)
 	// mock 规则匹配结果
 	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{
-		{true, true}, // 前半部分用，只包含一次匹配
+		{true, true}, {true, true}, // 前半部分用，每次只需只包含一次匹配
 		// 后半部分需要两个不匹配跳过规则（可能要再加上GFWList的匹配/不匹配）
 		{false, false}, {false, false},
 		{false, false}, {false, false}, {false, false},
@@ -120,11 +120,13 @@ func TestHandler(t *testing.T) {
 	})
 	// 规则匹配后mock CallDNS
 	mocker.MethodSeq(group, "CallDNS", []gomonkey.Params{
-		{resp}, // 前半部分用
+		{resp}, {nil}, // 前半部分用
 		{resp}, {resp}, {resp}, {resp},
 	})
 	handler.ServeDNS(writer, req) // 命中规则
 	assert.Equal(t, writer.r, resp)
+	handler.ServeDNS(writer, req) // 命中规则
+	assert.NotNil(t, writer.r)    // CallDNS返回空后直接返回&dns.Msg{}
 
 	// 测试ServeDNS后半部分：CN IP+GFWList
 	// mock allInRange
