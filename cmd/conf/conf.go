@@ -150,6 +150,7 @@ func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
 type Conf struct {
 	Listen      string
 	GFWList     string
+	GFWb64      bool `toml:"gfwlist_b64"`
 	CNIP        string
 	Logger      *QueryLog `toml:"query_log"`
 	HostsFiles  []string  `toml:"hosts_files"`
@@ -238,7 +239,7 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
 func NewHandler(filename string) (handler *inbound.Handler, err error) {
-	config := Conf{Cache: &Cache{}, Logger: &QueryLog{}}
+	config := Conf{Cache: &Cache{}, Logger: &QueryLog{}, GFWb64: true}
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		log.WithField("file", filename).Errorf("read config error: %v", err)
 		return nil, err
@@ -251,7 +252,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 		log.Warn("disable ipv6 resolve")
 	}
 	// 读取gfwlist
-	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, true); err != nil {
+	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, config.GFWb64); err != nil {
 		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
 		return nil, err
 	}
