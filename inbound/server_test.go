@@ -157,7 +157,19 @@ func TestGroup(t *testing.T) {
 	mocker := mock.NewMocker()
 	defer mocker.Reset()
 
-	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
+	ipv4 := net.IPv4(1, 1, 1, 1)
+	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: ipv4}}}
+	// 测试appendECS
+	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
+		{resp, nil}, {resp, nil}, {resp, nil},
+	})
+	group.ECS = &dns.EDNS0_SUBNET{Family: 1, SourceNetmask: 32, Address: ipv4}
+	req := &dns.Msg{Extra: []dns.RR{&dns.OPT{}}}
+	assert.Equal(t, len(req.Extra[0].(*dns.OPT).Option), 0) // 无ecs
+	_ = group.CallDNS(req)
+	assert.Equal(t, len(req.Extra[0].(*dns.OPT).Option), 1) // 附加了ecs
+	_ = group.CallDNS(req)
+	assert.Equal(t, len(req.Extra[0].(*dns.OPT).Option), 1) // 已有ecs，不再次附加ecs
 	// 测试CallDNS
 	assert.Nil(t, group.CallDNS(nil))
 	mocker.MethodSeq(callers[0], "Call", []gomonkey.Params{
