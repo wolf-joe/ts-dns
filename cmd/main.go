@@ -27,8 +27,8 @@ func main() {
 		os.Exit(0)
 	}
 	if *debugMode {
-		log.Warn("show debug log")
 		log.SetLevel(log.DebugLevel)
+		log.Debug("show debug log")
 	}
 	// 读取配置文件
 	handler, err := conf.NewHandler(*filename)

@@ -7,11 +7,13 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
+	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/mock"
+	"net"
 	"os"
 	"testing"
 )
@@ -67,6 +69,35 @@ func TestGroup(t *testing.T) {
 	group.DoH = []string{"not exists", "https://domain/dns-query"} // 后一个有效
 	callers = group.GenCallers()
 	assert.Equal(t, len(callers), 4)
+
+	// 测试genECS
+	v4ECS := &dns.EDNS0_SUBNET{Family: 1, SourceNetmask: 32, Address: net.ParseIP("1.1.1.1")}
+	v6ECS := &dns.EDNS0_SUBNET{Family: 2, SourceNetmask: 128, Address: net.ParseIP("::1")}
+	group.ECS = ""
+	ecs, err := group.genECS()
+	assert.Nil(t, err)
+	assert.Nil(t, ecs)
+	group.ECS = "1.1.1."
+	ecs, err = group.genECS()
+	assert.NotNil(t, err)
+	assert.Nil(t, ecs)
+	group.ECS = "1.1.1.1"
+	ecs, err = group.genECS()
+	assert.Nil(t, err)
+	assert.Equal(t, ecs, v4ECS)
+	group.ECS = "1.1.1.1/"
+	ecs, err = group.genECS()
+	assert.NotNil(t, err)
+	assert.Nil(t, ecs)
+	group.ECS = "1.1.1.1/24"
+	ecs, err = group.genECS()
+	assert.Nil(t, err)
+	v4ECS.SourceNetmask = 24
+	assert.Equal(t, ecs, v4ECS)
+	group.ECS = "::1"
+	ecs, err = group.genECS()
+	assert.Nil(t, err)
+	assert.Equal(t, ecs, v6ECS)
 }
 
 func TestConf(t *testing.T) {
@@ -94,11 +125,16 @@ func TestConf(t *testing.T) {
 	assert.NotNil(t, readers[0].IP("host", false))
 	// 测试GenGroups
 	conf.Groups = map[string]*Group{"test": {Concurrent: true, FastestV4: true}}
-	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{{nil}, {nil}})
+	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{{nil}, {nil}, {nil}})
 	mocker.MethodSeq(&Group{}, "GenIPSet", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil},
 	})
-	groups, err := conf.GenGroups() // GenIPSet失败
+	conf.Groups["test"].ECS = "1.1.1."
+	groups, err := conf.GenGroups() // genECS失败
+	assert.NotNil(t, err)
+	assert.Nil(t, groups)
+	conf.Groups["test"].ECS = "1.1.1.1"
+	groups, err = conf.GenGroups() // GenIPSet失败
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
 	groups, err = conf.GenGroups() // GenIPSet成功

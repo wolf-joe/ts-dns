@@ -5,6 +5,7 @@ import (
 	"github.com/BurntSushi/toml"
 	log "github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
+	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
@@ -12,6 +13,7 @@ import (
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -45,6 +47,7 @@ func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
+	ECS         string
 	Socks5      string
 	IPSet       string
 	IPSetTTL    int `toml:"ipset_ttl"`
@@ -112,6 +115,36 @@ func (conf *Group) GenCallers() (callers []outbound.Caller) {
 		}
 	}
 	return
+}
+
+// 读取ecs配置并打包
+func (conf *Group) genECS() (ecs *dns.EDNS0_SUBNET, err error) {
+	if strings.Contains(conf.ECS, "/") { // 解析网段
+		addr, ipNet, err := net.ParseCIDR(conf.ECS)
+		if err != nil {
+			return nil, err
+		}
+		mask, _ := ipNet.Mask.Size()
+		ecs = &dns.EDNS0_SUBNET{Address: addr, SourceNetmask: uint8(mask)}
+	} else if conf.ECS != "" { // 解析ip
+		addr, mask := net.ParseIP(conf.ECS), uint8(0)
+		if addr.To4() != nil {
+			mask = uint8(net.IPv4len * 8)
+		} else if addr.To16() != nil {
+			mask = uint8(net.IPv6len * 8)
+		} else {
+			return nil, fmt.Errorf("wrong ip address: %s", conf.ECS)
+		}
+		ecs = &dns.EDNS0_SUBNET{Address: addr, SourceNetmask: mask}
+	} else {
+		return nil, nil
+	}
+	if ecs.Address.To4() != nil {
+		ecs.Family = uint16(1)
+	} else {
+		ecs.Family = uint16(2)
+	}
+	return ecs, nil
 }
 
 // Cache 配置文件中cache section对应的结构
@@ -226,6 +259,10 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 		if inboundGroup.FastestV4 {
 			log.Warnln("find fastest ipv4 in group " + name)
 		}
+		if inboundGroup.ECS, err = group.genECS(); err != nil {
+			return nil, err
+		}
+		log.Debugf("ecs conf: %v", inboundGroup.ECS)
 		// 读取匹配规则
 		inboundGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
 		// 读取IPSet配置
@@ -263,7 +300,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	// 读取groups
 	if handler.Groups, err = config.GenGroups(); err != nil {
-		log.Errorf("create ipset error: %v", err)
+		log.Errorf("read group config error: %v", err)
 		return nil, err
 	}
 	handler.HostsReaders = config.GenHostsReader()
