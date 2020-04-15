@@ -13,7 +13,7 @@
 * 默认基于`CN IP列表` + `GFWList`进行域名分组；
 * 支持DNS over UDP/TCP/TLS/HTTPS、非标准端口DNS；
 * 支持选择ping值最低的IPv4地址（tcp/icmp ping）；
-* 支持并发请求/socks5代理请求上游DNS；
+* 支持并发请求/socks5代理请求上游DNS，支持附带指定ECS信息；
 * 支持多Hosts文件 + 自定义Hosts；
 * 支持配置文件自动重载；
 * 支持DNS查询缓存（IP乱序、TTL倒计时、ECS）；
@@ -34,6 +34,7 @@
 1. 在[Releases页面](https://github.com/wolf-joe/ts-dns/releases)下载对应系统和平台的压缩包；
 2. 解压后按需求编辑配置文件`ts-dns.toml`（可选）并运行进程：
   ```shell
+  # ./ts-dns -h  # 显示命令行帮助信息
   # ./ts-dns -c ts-dns.toml  # 指定配置文件名
   # ./ts-dns -r  # 自动重载配置文件
   ./ts-dns
@@ -84,7 +85,15 @@
     # ...
   ```
 
-5. 自定义域名分组
+5. 转发至上游DNS时默认附带指定ECS信息（暂不支持DOH）
+  ```toml
+  # ...
+    [groups.clean]
+    ecs = "1.2.4.0/24"
+    # ...
+  ```
+
+6. 自定义域名分组
   ```toml
   # ...
     [groups.work]
@@ -93,7 +102,7 @@
     # ...
   ```
 
-6. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
+7. 动态添加IPSet记录（使用前请阅读`ts-dns.full.toml`对应说明）
   ```toml
   # ...
     [groups.dirty]
@@ -105,8 +114,8 @@
 
 ## TODO
 
+* 支持通配符hosts
 * 设置fallback DNS
-* 使用ECS转发DNS请求
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
