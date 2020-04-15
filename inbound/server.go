@@ -40,6 +40,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	}
 	// 遍历DNS服务器
 	for _, caller := range group.Callers {
+		log.Debugf("forward question %v to %v", request.Question[0], caller)
 		if group.Concurrent || group.FastestV4 {
 			go call(caller, request)
 		} else if r := call(caller, request); r != nil {
@@ -140,6 +141,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}()
 
 	question := request.Question[0]
+	log.Debugf("question: %v, extract: %v", request.Question[0], request.Extra[0])
 	if handler.DisableIPv6 && question.Qtype == dns.TypeAAAA {
 		r = &dns.Msg{}
 		return // 禁用IPv6时直接返回

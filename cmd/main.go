@@ -20,10 +20,15 @@ func main() {
 	filename := flag.String("c", "ts-dns.toml", "config file path")
 	reload := flag.Bool("r", false, "auto reload config file")
 	showVer := flag.Bool("v", false, "show version and exit")
+	debugMode := flag.Bool("vv", false, "show debug log")
 	flag.Parse()
 	if *showVer { // 显示版本号并退出
 		fmt.Println(VERSION)
 		os.Exit(0)
+	}
+	if *debugMode {
+		log.Warn("show debug log")
+		log.SetLevel(log.DebugLevel)
 	}
 	// 读取配置文件
 	handler, err := conf.NewHandler(*filename)
