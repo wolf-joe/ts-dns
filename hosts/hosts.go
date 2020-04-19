@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,17 +23,26 @@ type Reader interface {
 // TextReader 基于文本的读取器
 type TextReader struct {
 	v4Map map[string]string
+	v4Reg map[*regexp.Regexp]string
 	v6Map map[string]string
+	v6Reg map[*regexp.Regexp]string
 }
 
 // IP 获取hostname对应的ip地址，如不存在则返回空串
-func (r *TextReader) IP(hostname string, ipv6 bool) (val string) {
+func (r *TextReader) IP(hostname string, ipv6 bool) string {
+	hostMap, regMap := r.v4Map, r.v4Reg
 	if ipv6 {
-		val, _ = r.v6Map[hostname]
-	} else {
-		val, _ = r.v4Map[hostname]
+		hostMap, regMap = r.v6Map, r.v6Reg
 	}
-	return
+	if val, ok := hostMap[hostname]; ok {
+		return val
+	}
+	for regex, val := range regMap {
+		if regex.MatchString(hostname) {
+			return val
+		}
+	}
+	return ""
 }
 
 // Record 生成hostname对应的dns记录，格式为"hostname ttl IN A ip"，如不存在则返回空串
@@ -49,7 +59,8 @@ func (r *TextReader) Record(hostname string, ipv6 bool) (record string) {
 
 // NewReaderByText 解析文本内容中的Hosts
 func NewReaderByText(text string) (r *TextReader) {
-	r = &TextReader{v4Map: map[string]string{}, v6Map: map[string]string{}}
+	r = &TextReader{v4Map: map[string]string{}, v4Reg: map[*regexp.Regexp]string{},
+		v6Map: map[string]string{}, v6Reg: map[*regexp.Regexp]string{}}
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.Trim(line, " \t\r")
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -58,10 +69,24 @@ func NewReaderByText(text string) (r *TextReader) {
 		splitter := func(r rune) bool { return r == ' ' || r == '\t' }
 		if arr := strings.FieldsFunc(line, splitter); len(arr) >= 2 {
 			ip, hostname := net.ParseIP(arr[0]), arr[1]
+			var regex *regexp.Regexp
+			if strings.ContainsRune(hostname, '*') {
+				hostname = strings.Replace(hostname, ".", "\\.", -1)
+				hostname = strings.Replace(hostname, "*", ".*", -1)
+				regex = regexp.MustCompile("^" + hostname + "$")
+			}
 			if ip.To4() != nil {
-				r.v4Map[hostname] = ip.To4().String()
+				if regex != nil {
+					r.v4Reg[regex] = ip.To4().String()
+				} else {
+					r.v4Map[hostname] = ip.To4().String()
+				}
 			} else if ip.To16() != nil {
-				r.v6Map[hostname] = ip.To16().String()
+				if regex != nil {
+					r.v6Reg[regex] = ip.To16().String()
+				} else {
+					r.v6Map[hostname] = ip.To16().String()
+				}
 			}
 		}
 	}

@@ -21,6 +21,14 @@ func TestNewTextReader(t *testing.T) {
 	assert.Equal(t, reader.Record("localhost", false), expect)
 	expect = "ip6-localhost 0 IN AAAA ::1"
 	assert.Equal(t, reader.Record("ip6-localhost", true), expect)
+
+	// 通配符hosts
+	content = "1.1.1.1 www.*.org \n ::1 *.cn"
+	reader = NewReaderByText(content)
+	assert.Equal(t, reader.IP("www.test.org", false), "1.1.1.1")
+	assert.Equal(t, reader.IP("m.test.org", false), "")
+	assert.Equal(t, reader.IP("test.cn", true), "::1")
+	assert.Equal(t, reader.IP("test.cn", false), "")
 }
 
 func TestNewFileReader(t *testing.T) {
