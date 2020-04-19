@@ -14,7 +14,7 @@
 * 支持DNS over UDP/TCP/TLS/HTTPS、非标准端口DNS；
 * 支持选择ping值最低的IPv4地址（tcp/icmp ping）；
 * 支持并发请求/socks5代理请求上游DNS，支持附带指定ECS信息；
-* 支持多Hosts文件 + 自定义Hosts；
+* 支持多Hosts文件 + 自定义Hosts、通配符Hosts；
 * 支持配置文件自动重载；
 * 支持DNS查询缓存（IP乱序、TTL倒计时、ECS）；
 * 支持禁用IPv6解析；
@@ -114,7 +114,6 @@
 
 ## TODO
 
-* 支持通配符hosts
 * 设置fallback DNS
 
 ## 特别鸣谢

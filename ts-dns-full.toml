@@ -10,6 +10,7 @@ disable_ipv6 = true  # 禁用IPv6地址解析，默认为false
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 [hosts] # 自定义域名映射
 "example.com" = "8.8.8.8"
+"*.example.com" = "8.8.8.8"  # 通配符Hosts
 "cloudflare-dns.com" = "1.0.0.1"  # 防止下文提到的DoH回环解析
 
 [query_log]
