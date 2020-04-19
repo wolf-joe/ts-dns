@@ -69,6 +69,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 	}
 	matcher = &ABPlus{isBlocked: map[string]bool{}}
 	for _, line := range strings.Split(text, "\n") {
+		line = strings.Trim(line, " \t\r")
 		if line == "" || line[0] == '!' || line[0] == '[' {
 			continue // 忽略空行、注释行、类型声明
 		} else if line[0] == '/' { // path类规则
