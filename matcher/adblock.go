@@ -125,6 +125,9 @@ func NewABPByText(text string) (matcher *ABPlus) {
 
 // NewABPByFile 从文件内容读取AdBlock Plus规则
 func NewABPByFile(filename string, b64decode bool) (checker *ABPlus, err error) {
+	if filename == "" {
+		return NewABPByText(""), nil
+	}
 	var raw []byte
 	var text string
 	if raw, err = ioutil.ReadFile(filename); err == nil {

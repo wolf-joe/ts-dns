@@ -22,8 +22,12 @@ unknown
 
 func TestNewChecker(t *testing.T) {
 	filename := "go_test_adblock.txt"
+	// 空文件名
+	matcher, err := NewABPByFile("", false)
+	assert.NotNil(t, matcher)
+	assert.Nil(t, err)
 	// 文件不存在
-	matcher, err := NewABPByFile(filename, false)
+	matcher, err = NewABPByFile(filename, false)
 	assert.NotEqual(t, err, nil)
 	// 写入不正确内容
 	content := base64.StdEncoding.EncodeToString([]byte(text)) + "???"
