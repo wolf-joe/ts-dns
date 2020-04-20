@@ -67,3 +67,15 @@ func TestNewChecker(t *testing.T) {
 	assert.Equal(t, matched, true)
 	assert.Equal(t, ok, true)
 }
+
+func TestABPlus_Extend(t *testing.T) {
+	matcher := NewABPByText("||test.com")
+	matcher.Extend(NewABPByText("||example.com"))
+	matcher.Extend(NewABPByText("@@||test.com"))
+	matched, ok := matcher.Match("www.test.com")
+	assert.False(t, matched)
+	assert.True(t, ok)
+	matched, ok = matcher.Match("www.example.com")
+	assert.True(t, matched)
+	assert.True(t, ok)
+}

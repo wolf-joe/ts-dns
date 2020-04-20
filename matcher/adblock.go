@@ -49,6 +49,17 @@ func (matcher *ABPlus) Match(domain string) (matched bool, ok bool) {
 	return false, false
 }
 
+// Extend 将目标ABPlus对象规则添加到自身，规则重复时覆盖
+func (matcher *ABPlus) Extend(target *ABPlus) {
+	if target != nil {
+		for domain, flag := range target.isBlocked {
+			matcher.isBlocked[domain] = flag
+		}
+		matcher.blockedRegs = append(matcher.blockedRegs, target.blockedRegs...)
+		matcher.unblockedRegs = append(matcher.unblockedRegs, target.unblockedRegs...)
+	}
+}
+
 // NewABPByText 从文本内容读取AdBlock Plus规则
 func NewABPByText(text string) (matcher *ABPlus) {
 	extractDomain := func(rule string) string {
