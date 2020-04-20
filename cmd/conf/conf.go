@@ -58,6 +58,7 @@ type Group struct {
 	FastestV4   bool `toml:"fastest_v4"`
 	TCPPingPort int  `toml:"tcp_ping_port"`
 	Rules       []string
+	RulesFile   string `toml:"rules_file"`
 }
 
 // GenIPSet 读取ipset配置并打包成IPSet对象
@@ -264,7 +265,11 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 		}
 		log.Debugf("ecs conf: %v", inboundGroup.ECS)
 		// 读取匹配规则
-		inboundGroup.Matcher = matcher.NewABPByText(strings.Join(group.Rules, "\n"))
+		inboundGroup.Matcher, err = matcher.NewABPByFile(group.RulesFile, false)
+		if err != nil {
+			return nil, err
+		}
+		inboundGroup.Matcher.Extend(matcher.NewABPByText(strings.Join(group.Rules, "\n")))
 		// 读取IPSet配置
 		if inboundGroup.IPSet, err = group.GenIPSet(); err != nil {
 			return nil, err

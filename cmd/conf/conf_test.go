@@ -125,7 +125,9 @@ func TestConf(t *testing.T) {
 	assert.NotNil(t, readers[0].IP("host", false))
 	// 测试GenGroups
 	conf.Groups = map[string]*Group{"test": {Concurrent: true, FastestV4: true}}
-	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{{nil}, {nil}, {nil}})
+	mocker.MethodSeq(&Group{}, "GenCallers", []gomonkey.Params{
+		{nil}, {nil}, {nil}, {nil},
+	})
 	mocker.MethodSeq(&Group{}, "GenIPSet", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil},
 	})
@@ -134,7 +136,12 @@ func TestConf(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
 	conf.Groups["test"].ECS = "1.1.1.1"
-	groups, err = conf.GenGroups() // GenIPSet失败
+	conf.Groups["test"].RulesFile = "???not_exists" // NewABPByFile失败
+	groups, err = conf.GenGroups()
+	assert.NotNil(t, err)
+	assert.Nil(t, groups)
+	conf.Groups["test"].RulesFile = "" // NewABPByFile成功
+	groups, err = conf.GenGroups()     // GenIPSet失败
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
 	groups, err = conf.GenGroups() // GenIPSet成功
