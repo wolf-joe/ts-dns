@@ -39,7 +39,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 		}
 		if appendECS && group.ECS != nil {
 			log.Debugf("append ecs %v to request", group.ECS)
-			dnsOPT.Option = append(dnsOPT.Option, group.ECS)
+			dnsOPT.Option = append([]dns.EDNS0{group.ECS}, dnsOPT.Option...)
 		}
 	}
 	// 并发用的channel
