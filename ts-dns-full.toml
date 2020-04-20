@@ -27,7 +27,7 @@ max_ttl = 86400  # 最大ttl，单位为秒
 [groups] # 对域名进行分组
   [groups.clean]  # 必选分组，默认域名所在分组
   ecs = "1.2.4.0/24"  # edns-client-subnet信息，配置后转发DNS请求时默认附带（已有ecs时不覆盖），暂不支持doh
-  dns = ["119.29.29.29/tcp", "223.5.5.5:53", "114.114.114.114"]  # DNS服务器列表，默认使用53端口
+  dns = ["223.5.5.5:53", "114.114.114.114/tcp"]  # DNS服务器列表，默认使用53端口
   concurrent = true  # 并发请求dns服务器列表
   rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
   rules_file = "rules.txt"  # 规则文件，每行一个规则
