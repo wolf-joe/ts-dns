@@ -30,6 +30,7 @@ max_ttl = 86400  # 最大ttl，单位为秒
   dns = ["119.29.29.29/tcp", "223.5.5.5:53", "114.114.114.114"]  # DNS服务器列表，默认使用53端口
   concurrent = true  # 并发请求dns服务器列表
   rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
+  rules_file = "rules.txt"  # 规则文件，每行一个规则
 
   fastest_v4 = true  # 选择ping值最低的ipv4地址作为响应，启用且使用icmp ping时建议以root权限允许本程序
   tcp_ping_port = 80  # 当启用fastest_v4时，如该值大于0则使用tcp ping，小于等于0则使用icmp ping
