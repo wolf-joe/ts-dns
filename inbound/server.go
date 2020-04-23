@@ -147,6 +147,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			r = &dns.Msg{}
 		}
 		r.SetReply(request) // 写入响应
+		log.Debug("response: ", r.Answer)
 		_ = resp.WriteMsg(r)
 		if group != nil {
 			group.AddIPSet(r) // 写入IPSet
