@@ -76,6 +76,9 @@ func NewABPByText(text string) (matcher *ABPlus) {
 		if i := strings.Index(rule, "/"); i != -1 {
 			rule = rule[:i] // remove path of url
 		}
+		if i := strings.Index(rule, "^"); i != -1 {
+			rule = rule[:i]
+		}
 		return rule
 	}
 	matcher = &ABPlus{isBlocked: map[string]bool{}}
