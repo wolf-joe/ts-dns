@@ -78,7 +78,7 @@ func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
 	if r == nil || ecs == nil {
 		return
 	}
-	firstOPTIndex, setECS := -1, true
+	firstOPTIndex := -1
 	for index, extra := range r.Extra {
 		switch extra.(type) {
 		case *dns.OPT:
@@ -88,18 +88,16 @@ func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
 			for _, opt := range extra.(*dns.OPT).Option {
 				switch opt.(type) {
 				case *dns.EDNS0_SUBNET:
-					setECS = false
+					return // 如已存在ECS对象则直接结束
 				}
 			}
 		}
 	}
-	if firstOPTIndex < 0 || setECS {
-		log.Debugf("set default ecs %v to msg", ecs)
-	}
+	log.Debugf("set default ecs %v to msg", ecs)
 	if firstOPTIndex < 0 {
 		// 如果r.Extra为空或所有值都不为*dns.OPT，则在r.Extra的末尾添加一个*dns.OPT
 		r.Extra = append(r.Extra, &dns.OPT{Option: []dns.EDNS0{ecs}})
-	} else if setECS {
+	} else {
 		// 否则在第一个*dns.OPT的Option列表的开头插入ECS对象
 		opt := r.Extra[firstOPTIndex].(*dns.OPT)
 		opt.Option = append([]dns.EDNS0{ecs}, opt.Option...)

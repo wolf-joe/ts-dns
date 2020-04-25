@@ -2,22 +2,19 @@ package common
 
 import (
 	"github.com/agiledragon/gomonkey"
+	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	"github.com/wolf-joe/ts-dns/cache"
 	"testing"
-	"time"
 )
 
 func TestMocker(t *testing.T) {
 	mocker := Mocker{}
 
-	ttlMap := cache.NewTTLMap(time.Hour)
-	// 让ttlMap.Get返回非空
-	mocker.MethodSeq(ttlMap, "Get", []gomonkey.Params{{"bbb", true}})
+	msg := &dns.Msg{}
+	// 修改msg.String()的返回值
+	mocker.MethodSeq(msg, "String", []gomonkey.Params{{"test string"}})
 	// mock成功
-	content, ok := ttlMap.Get("")
-	assert.NotNil(t, content)
-	assert.True(t, ok)
+	assert.Equal(t, msg.String(), "test string")
 	// 修改FormatSubnet的返回值
 	mocker.FuncSeq(FormatECS, []gomonkey.Params{{"1.1.1.1/32"}})
 	// mock成功
@@ -26,10 +23,8 @@ func TestMocker(t *testing.T) {
 	assert.Equal(t, len(mocker.patches), 2)
 	mocker.Reset()
 	assert.Equal(t, len(mocker.patches), 0)
-	// ttlMap.Get返回空
-	content, ok = ttlMap.Get("")
-	assert.Nil(t, content)
-	assert.False(t, ok)
+	// msg.String()的返回值被重置
+	assert.NotEqual(t, msg.String(), "test string")
 	// FormatSubnet的返回值被重置
 	assert.NotEqual(t, FormatECS(nil), "1.1.1.1/32")
 }
