@@ -18,40 +18,60 @@ func TestExtractA(t *testing.T) {
 	assert.Equal(t, len(ExtractA(r)), 1)
 }
 
-func TestParseSubnet(t *testing.T) {
-	ecs, err := ParseSubnet("")
+func TestParseECS(t *testing.T) {
+	ecs, err := ParseECS("")
 	assert.Nil(t, ecs)
 	assert.Nil(t, err)
-	ecs, err = ParseSubnet("??????")
-	assert.Nil(t, ecs)
-	assert.NotNil(t, err)
-	ecs, err = ParseSubnet("1.1.1.1/33")
+	ecs, err = ParseECS("??????")
 	assert.Nil(t, ecs)
 	assert.NotNil(t, err)
-	ecs, err = ParseSubnet("1.1.1.256")
+	ecs, err = ParseECS("1.1.1.1/33")
 	assert.Nil(t, ecs)
 	assert.NotNil(t, err)
-	ecs, err = ParseSubnet("1.1.1.1/24")
+	ecs, err = ParseECS("1.1.1.256")
+	assert.Nil(t, ecs)
+	assert.NotNil(t, err)
+	ecs, err = ParseECS("1.1.1.1/24")
 	assert.NotNil(t, ecs)
 	assert.Nil(t, err)
-	ecs, err = ParseSubnet("1.1.1.1")
+	ecs, err = ParseECS("1.1.1.1")
 	assert.NotNil(t, ecs)
 	assert.Nil(t, err)
-	ecs, err = ParseSubnet("::1/128")
+	ecs, err = ParseECS("::1/128")
 	assert.NotNil(t, ecs)
 	assert.Nil(t, err)
-	ecs, err = ParseSubnet("::1")
+	ecs, err = ParseECS("::1")
 	assert.NotNil(t, ecs)
 	assert.Nil(t, err)
 }
 
-func TestFormatSubnet(t *testing.T) {
-	assert.Empty(t, FormatSubnet(nil))
+func TestFormatECS(t *testing.T) {
+	assert.Empty(t, FormatECS(nil))
 	r := &dns.Msg{}
 	r.Extra = append(r.Extra, &dns.OPT{Option: []dns.EDNS0{&dns.EDNS0_COOKIE{}}})
-	assert.Empty(t, FormatSubnet(r))
-	r.Extra[0].(*dns.OPT).Option[0], _ = ParseSubnet("1.1.1.1")
-	assert.Equal(t, FormatSubnet(r), "1.1.1.1/32")
-	r.Extra[0].(*dns.OPT).Option[0], _ = ParseSubnet("1.1.1.1/24")
-	assert.Equal(t, FormatSubnet(r), "1.1.1.1/24")
+	assert.Empty(t, FormatECS(r))
+	r.Extra[0].(*dns.OPT).Option[0], _ = ParseECS("1.1.1.1")
+	assert.Equal(t, FormatECS(r), "1.1.1.1/32")
+	r.Extra[0].(*dns.OPT).Option[0], _ = ParseECS("1.1.1.1/24")
+	assert.Equal(t, FormatECS(r), "1.1.1.1/24")
+}
+
+func TestSetDefaultECS(t *testing.T) {
+	r := &dns.Msg{}
+	SetDefaultECS(r, nil)
+	assert.Equal(t, FormatECS(r), "")
+	ecs, _ := ParseECS("1.1.1.1")
+	SetDefaultECS(r, ecs)
+	assert.Equal(t, FormatECS(r), "1.1.1.1/32")
+	r = &dns.Msg{Extra: []dns.RR{&dns.OPT{Option: []dns.EDNS0{&dns.EDNS0_COOKIE{}}}}}
+	SetDefaultECS(r, ecs)
+	assert.Equal(t, len(r.Extra), 1)
+	assert.Equal(t, len(r.Extra[0].(*dns.OPT).Option), 2)
+	assert.Equal(t, FormatECS(r), "1.1.1.1/32")
+	// 已有ecs信息时SetDefaultECS不执行动作
+	ecs, _ = ParseECS("2.2.2.2")
+	SetDefaultECS(r, ecs)
+	assert.Equal(t, len(r.Extra), 1)
+	assert.Equal(t, len(r.Extra[0].(*dns.OPT).Option), 2)
+	assert.Equal(t, FormatECS(r), "1.1.1.1/32")
 }

@@ -19,9 +19,9 @@ func TestMocker(t *testing.T) {
 	assert.NotNil(t, content)
 	assert.True(t, ok)
 	// 修改FormatSubnet的返回值
-	mocker.FuncSeq(FormatSubnet, []gomonkey.Params{{"1.1.1.1/32"}})
+	mocker.FuncSeq(FormatECS, []gomonkey.Params{{"1.1.1.1/32"}})
 	// mock成功
-	assert.Equal(t, FormatSubnet(nil), "1.1.1.1/32")
+	assert.Equal(t, FormatECS(nil), "1.1.1.1/32")
 	// 取消所有mock
 	assert.Equal(t, len(mocker.patches), 2)
 	mocker.Reset()
@@ -31,5 +31,5 @@ func TestMocker(t *testing.T) {
 	assert.Nil(t, content)
 	assert.False(t, ok)
 	// FormatSubnet的返回值被重置
-	assert.NotEqual(t, FormatSubnet(nil), "1.1.1.1/32")
+	assert.NotEqual(t, FormatECS(nil), "1.1.1.1/32")
 }

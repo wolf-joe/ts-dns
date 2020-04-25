@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"net"
 	"strings"
@@ -21,8 +22,8 @@ func ExtractA(r *dns.Msg) (records []*dns.A) {
 	return
 }
 
-// ParseSubnet 将字符串（IP/CIDR）转换为EDNS CLIENT SUBNET对象
-func ParseSubnet(s string) (ecs *dns.EDNS0_SUBNET, err error) {
+// ParseECS 将字符串（IP/CIDR）转换为EDNS CLIENT SUBNET对象
+func ParseECS(s string) (ecs *dns.EDNS0_SUBNET, err error) {
 	if s == "" {
 		return nil, nil
 	}
@@ -52,8 +53,8 @@ func ParseSubnet(s string) (ecs *dns.EDNS0_SUBNET, err error) {
 	return ecs, nil
 }
 
-// FormatSubnet 将DNS请求/响应里的EDNS CLIENT SUBNET对象格式化为字符串
-func FormatSubnet(r *dns.Msg) string {
+// FormatECS 将DNS请求/响应里的EDNS CLIENT SUBNET对象格式化为字符串
+func FormatECS(r *dns.Msg) string {
 	if r == nil {
 		return ""
 	}
@@ -70,4 +71,37 @@ func FormatSubnet(r *dns.Msg) string {
 		}
 	}
 	return ""
+}
+
+// SetDefaultECS 为DNS请求/响应设置默认的ECS对象
+func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
+	if r == nil || ecs == nil {
+		return
+	}
+	firstOPTIndex, setECS := -1, true
+	for index, extra := range r.Extra {
+		switch extra.(type) {
+		case *dns.OPT:
+			if firstOPTIndex < 0 {
+				firstOPTIndex = index
+			}
+			for _, opt := range extra.(*dns.OPT).Option {
+				switch opt.(type) {
+				case *dns.EDNS0_SUBNET:
+					setECS = false
+				}
+			}
+		}
+	}
+	if firstOPTIndex < 0 || setECS {
+		log.Debugf("set default ecs %v to msg", ecs)
+	}
+	if firstOPTIndex < 0 {
+		// 如果r.Extra为空或所有值都不为*dns.OPT，则在r.Extra的末尾添加一个*dns.OPT
+		r.Extra = append(r.Extra, &dns.OPT{Option: []dns.EDNS0{ecs}})
+	} else if setECS {
+		// 否则在第一个*dns.OPT的Option列表的开头插入ECS对象
+		opt := r.Extra[firstOPTIndex].(*dns.OPT)
+		opt.Option = append([]dns.EDNS0{ecs}, opt.Option...)
+	}
 }
