@@ -1,4 +1,4 @@
-package mock
+package common
 
 import (
 	"github.com/agiledragon/gomonkey"
@@ -8,12 +8,8 @@ import (
 	"time"
 )
 
-func falseFunc() bool {
-	return false
-}
-
 func TestMocker(t *testing.T) {
-	mocker := NewMocker()
+	mocker := Mocker{}
 
 	ttlMap := cache.NewTTLMap(time.Hour)
 	// 让ttlMap.Get返回非空
@@ -22,10 +18,10 @@ func TestMocker(t *testing.T) {
 	content, ok := ttlMap.Get("")
 	assert.NotNil(t, content)
 	assert.True(t, ok)
-	// 让falseFunc返回true
-	mocker.FuncSeq(falseFunc, []gomonkey.Params{{true}})
+	// 修改FormatSubnet的返回值
+	mocker.FuncSeq(FormatSubnet, []gomonkey.Params{{"1.1.1.1/32"}})
 	// mock成功
-	assert.True(t, falseFunc())
+	assert.Equal(t, FormatSubnet(nil), "1.1.1.1/32")
 	// 取消所有mock
 	assert.Equal(t, len(mocker.patches), 2)
 	mocker.Reset()
@@ -34,6 +30,6 @@ func TestMocker(t *testing.T) {
 	content, ok = ttlMap.Get("")
 	assert.Nil(t, content)
 	assert.False(t, ok)
-	// falseFunc返回false
-	assert.False(t, falseFunc())
+	// FormatSubnet的返回值被重置
+	assert.NotEqual(t, FormatSubnet(nil), "1.1.1.1/32")
 }

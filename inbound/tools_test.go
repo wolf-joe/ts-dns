@@ -7,7 +7,7 @@ import (
 	"github.com/sparrc/go-ping"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	"github.com/wolf-joe/ts-dns/mock"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"net"
 	"testing"
 )
@@ -20,7 +20,7 @@ func TestTools(t *testing.T) {
 
 	assert.True(t, pingRtt("", -1) > maxRtt)
 	assert.True(t, pingRtt("111", -1) > maxRtt)
-	mocker := mock.NewMocker()
+	mocker := common.Mocker{}
 	defer mocker.Reset()
 	mocker.MethodSeq(&ping.Pinger{}, "Statistics", []gomonkey.Params{
 		{&ping.Statistics{PacketsRecv: 1, AvgRtt: maxRtt - 1}},

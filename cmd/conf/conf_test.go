@@ -10,9 +10,9 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
-	"github.com/wolf-joe/ts-dns/mock"
 	"net"
 	"os"
 	"testing"
@@ -24,7 +24,7 @@ func TestQueryLog(t *testing.T) {
 	assert.NotNil(t, logger)
 	assert.Nil(t, err)
 
-	mocker := mock.NewMocker()
+	mocker := common.Mocker{}
 	defer mocker.Reset()
 
 	logConf.File = "aaa"
@@ -41,7 +41,7 @@ func TestQueryLog(t *testing.T) {
 }
 
 func TestGroup(t *testing.T) {
-	mocker := mock.NewMocker()
+	mocker := common.Mocker{}
 	defer mocker.Reset()
 
 	group := Group{}
@@ -101,7 +101,7 @@ func TestGroup(t *testing.T) {
 }
 
 func TestConf(t *testing.T) {
-	mocker := mock.NewMocker()
+	mocker := common.Mocker{}
 	defer mocker.Reset()
 
 	conf := &Conf{}
@@ -150,7 +150,7 @@ func TestConf(t *testing.T) {
 }
 
 func TestNewHandler(t *testing.T) {
-	mocker := mock.NewMocker()
+	mocker := common.Mocker{}
 	defer mocker.Reset()
 
 	mocker.FuncSeq(toml.DecodeFile, []gomonkey.Params{

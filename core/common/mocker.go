@@ -1,4 +1,4 @@
-package mock
+package common
 
 import (
 	"github.com/agiledragon/gomonkey"
@@ -35,9 +35,4 @@ func (m *Mocker) Reset() {
 		patches.Reset()
 	}
 	m.patches = []*gomonkey.Patches{}
-}
-
-// NewMocker 新建一个Mocker
-func NewMocker() *Mocker {
-	return &Mocker{patches: []*gomonkey.Patches{}}
 }
