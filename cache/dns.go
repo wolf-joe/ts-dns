@@ -1,29 +1,12 @@
 package cache
 
 import (
-	"fmt"
 	"github.com/miekg/dns"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"math/rand"
 	"strconv"
 	"time"
 )
-
-// 获取dns请求或响应extra中的subnet字符串，格式为"Address/SourceNetmask"
-func getSubnet(extra []dns.RR) string {
-	for _, extra := range extra {
-		switch extra.(type) {
-		case *dns.OPT:
-			for _, opt := range extra.(*dns.OPT).Option {
-				switch opt.(type) {
-				case *dns.EDNS0_SUBNET:
-					subOpt := opt.(*dns.EDNS0_SUBNET)
-					return fmt.Sprintf("%s/%d", subOpt.Address, subOpt.SourceNetmask)
-				}
-			}
-		}
-	}
-	return ""
-}
 
 // DNSCache DNS响应缓存器
 type DNSCache struct {
@@ -66,9 +49,9 @@ func (entry *cacheEntry) Get() *dns.Msg {
 
 // Get 获取DNS响应缓存，响应的ttl为倒计时形式
 func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
-	question, extra := request.Question[0], request.Extra
+	question := request.Question[0]
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if subnet := getSubnet(extra); subnet != "" {
+	if subnet := common.FormatECS(request); subnet != "" {
 		cacheKey += "." + subnet
 	}
 	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
@@ -80,12 +63,12 @@ func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 
 // Set 设置DNS响应缓存，缓存的ttl由minTTL、maxTTL、响应本身的ttl共同决定
 func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
-	question, extra := request.Question[0], request.Extra
+	question := request.Question[0]
 	if cache.ttlMap.Len() >= cache.size || r == nil || len(r.Answer) <= 0 {
 		return
 	}
 	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if subnet := getSubnet(extra); subnet != "" {
+	if subnet := common.FormatECS(request); subnet != "" {
 		cacheKey += "." + subnet
 	}
 	var ex = cache.maxTTL

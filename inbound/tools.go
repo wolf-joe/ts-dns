@@ -5,6 +5,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/sparrc/go-ping"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"math"
 	"net"
 	"strconv"
@@ -14,23 +15,9 @@ import (
 
 const maxRtt = 500
 
-// 提取dns响应中的A记录列表
-func extractA(r *dns.Msg) (records []*dns.A) {
-	if r == nil {
-		return
-	}
-	for _, answer := range r.Answer {
-		switch answer.(type) {
-		case *dns.A:
-			records = append(records, answer.(*dns.A))
-		}
-	}
-	return
-}
-
 // 如dns响应中所有ipv4地址都在目标范围内（或没有ipv4地址）返回true，否则返回False
 func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
-	for _, a := range extractA(r) {
+	for _, a := range common.ExtractA(r) {
 		if ipv4 := net.ParseIP(a.A.String()).To4(); ipv4 != nil && !ipRange.Contain(ipv4) {
 			return false
 		}
@@ -74,7 +61,7 @@ func fastestA(ch chan *dns.Msg, chLen int, tcpPort int) (res *dns.Msg) {
 		if msg != nil {
 			res = msg // 防止被最后出现的nil覆盖
 		}
-		for _, a := range extractA(msg) {
+		for _, a := range common.ExtractA(msg) {
 			ipv4, aObj := a.A.String(), *a // 用aObj实体变量来防止aMap的键值不一致
 			wg.Add(1)
 			go func() {

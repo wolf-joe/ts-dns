@@ -5,10 +5,10 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
-	"reflect"
 	"strings"
 	"sync"
 )
@@ -29,19 +29,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
-	if len(request.Extra) > 0 && reflect.TypeOf(request.Extra[0]).String() == "*dns.OPT" {
-		appendECS, dnsOPT := true, request.Extra[0].(*dns.OPT)
-		for _, opt := range dnsOPT.Option {
-			if reflect.TypeOf(opt).String() == "*dns.EDNS0_SUBNET" {
-				appendECS = false
-				break
-			}
-		}
-		if appendECS && group.ECS != nil {
-			log.Debugf("append ecs %v to request", group.ECS)
-			dnsOPT.Option = append([]dns.EDNS0{group.ECS}, dnsOPT.Option...)
-		}
-	}
+	common.SetDefaultECS(request, group.ECS)
 	// 并发用的channel
 	ch := make(chan *dns.Msg, len(group.Callers))
 	// 包裹Caller.Call，方便实现并发
@@ -80,7 +68,7 @@ func (group *Group) AddIPSet(r *dns.Msg) {
 	if group.IPSet == nil || r == nil {
 		return
 	}
-	for _, a := range extractA(r) {
+	for _, a := range common.ExtractA(r) {
 		if err := group.IPSet.Add(a.A.String(), group.IPSet.Timeout); err != nil {
 			log.Errorf("add ipset error: %v", err)
 		}

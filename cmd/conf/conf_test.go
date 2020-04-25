@@ -7,13 +7,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
-	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
-	"net"
 	"os"
 	"testing"
 )
@@ -70,34 +68,6 @@ func TestGroup(t *testing.T) {
 	callers = group.GenCallers()
 	assert.Equal(t, len(callers), 4)
 
-	// 测试genECS
-	v4ECS := &dns.EDNS0_SUBNET{Family: 1, SourceNetmask: 32, Address: net.ParseIP("1.1.1.1")}
-	v6ECS := &dns.EDNS0_SUBNET{Family: 2, SourceNetmask: 128, Address: net.ParseIP("::1")}
-	group.ECS = ""
-	ecs, err := group.genECS()
-	assert.Nil(t, err)
-	assert.Nil(t, ecs)
-	group.ECS = "1.1.1."
-	ecs, err = group.genECS()
-	assert.NotNil(t, err)
-	assert.Nil(t, ecs)
-	group.ECS = "1.1.1.1"
-	ecs, err = group.genECS()
-	assert.Nil(t, err)
-	assert.Equal(t, ecs, v4ECS)
-	group.ECS = "1.1.1.1/"
-	ecs, err = group.genECS()
-	assert.NotNil(t, err)
-	assert.Nil(t, ecs)
-	group.ECS = "1.1.1.1/24"
-	ecs, err = group.genECS()
-	assert.Nil(t, err)
-	v4ECS.SourceNetmask = 24
-	assert.Equal(t, ecs, v4ECS)
-	group.ECS = "::1"
-	ecs, err = group.genECS()
-	assert.Nil(t, err)
-	assert.Equal(t, ecs, v6ECS)
 }
 
 func TestConf(t *testing.T) {
