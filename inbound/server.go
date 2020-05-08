@@ -80,6 +80,7 @@ func (group *Group) AddIPSet(r *dns.Msg) {
 type Handler struct {
 	Mux          *sync.RWMutex
 	Listen       string
+	Network      string
 	DisableIPv6  bool
 	Cache        *cache.DNSCache
 	GFWMatcher   *matcher.ABPlus

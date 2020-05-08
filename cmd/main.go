@@ -42,10 +42,10 @@ func main() {
 	// 启动dns服务后异步解析DoH服务器域名
 	go func() { time.Sleep(time.Second); handler.ResolveDoH() }()
 	// 启动dns服务
-	srv := &dns.Server{Addr: handler.Listen, Net: "udp", Handler: handler}
-	log.Warnf("listen on %s/udp", handler.Listen)
+	srv := &dns.Server{Addr: handler.Listen, Net: handler.Network, Handler: handler}
+	log.Warnf("listen on %s/%s", handler.Listen, handler.Network)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("listen udp error: %v", err)
+		log.Fatalf("listen faied: %v", err)
 	}
 }
 
