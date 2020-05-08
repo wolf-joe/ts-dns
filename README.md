@@ -15,7 +15,7 @@
 * 支持选择ping值最低的IPv4地址（tcp/icmp ping）；
 * 支持并发请求/socks5代理请求上游DNS，支持附带指定ECS信息；
 * 支持多Hosts文件 + 自定义Hosts、通配符Hosts；
-* 支持配置文件自动重载；
+* 支持配置文件自动重载，支持监听TCP/UDP端口；
 * 支持DNS查询缓存（IP乱序、TTL倒计时、ECS）；
 * 支持禁用IPv6解析；
 * 支持将查询结果中的IPv4地址添加至IPSet。
