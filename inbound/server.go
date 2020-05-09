@@ -29,6 +29,7 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
+	request = request.Copy()
 	common.SetDefaultECS(request, group.ECS)
 	// 并发用的channel
 	ch := make(chan *dns.Msg, len(group.Callers))
