@@ -257,7 +257,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	config.SetDefault()
 	// 初始化handler
-	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen, Network: "udp"}
+	handler = &inbound.Handler{Mux: new(sync.RWMutex), Listen: config.Listen}
 	// 从listen中分离监听地址和协议
 	if i := strings.Index(config.Listen, "/"); i != -1 {
 		handler.Listen, handler.Network = config.Listen[:i], config.Listen[i+1:]

@@ -9,6 +9,7 @@ import (
 	"github.com/wolf-joe/ts-dns/cmd/conf"
 	"github.com/wolf-joe/ts-dns/inbound"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -41,12 +42,27 @@ func main() {
 	}
 	// 启动dns服务后异步解析DoH服务器域名
 	go func() { time.Sleep(time.Second); handler.ResolveDoH() }()
-	// 启动dns服务
-	srv := &dns.Server{Addr: handler.Listen, Net: handler.Network, Handler: handler}
-	log.Warnf("listen on %s/%s", handler.Listen, handler.Network)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("listen faied: %v", err)
+	// 启动dns服务，因为可能会同时监听TCP/UDP，所以封装个函数
+	wg := sync.WaitGroup{}
+	runSrv := func(net string) {
+		defer wg.Done()
+		srv := &dns.Server{Addr: handler.Listen, Net: net, Handler: handler}
+		log.Warnf("listen on %s/%s", handler.Listen, net)
+		if err := srv.ListenAndServe(); err != nil {
+			log.Errorf("%v", err)
+		}
 	}
+	// 判断是否在配置文件里指定了监听协议
+	if handler.Network != "" {
+		wg.Add(1)
+		go runSrv(handler.Network)
+	} else {
+		wg.Add(2)
+		go runSrv("udp")
+		go runSrv("tcp")
+	}
+	wg.Wait()
+	log.Info("ts-dns exited.")
 }
 
 // 持续监测目标配置文件，如文件发生变动则尝试载入，载入成功后更新现有handler的配置

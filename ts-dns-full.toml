@@ -1,7 +1,7 @@
 # Telescope DNS Configure File
 # https://github.com/wolf-joe/ts-dns
 
-listen = ":53/udp"  # 监听端口，支持指定tcp/udp
+listen = ":53/udp"  # 监听端口，支持指定tcp/udp，不指定时默认同时监听tcp&udp
 gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官方地址：https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
 gfwlist_b64 = true  # 是否使用base64解码gfwlist文件，默认为true
 cnip = "cnip.txt"  # 中国ip网段列表，用于辅助域名分组
