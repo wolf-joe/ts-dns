@@ -8,7 +8,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	"github.com/wolf-joe/ts-dns/core/mocker"
+	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
@@ -51,7 +51,7 @@ func TestHandler_Resolve(t *testing.T) {
 	callers := []outbound.Caller{caller1, caller2, &outbound.DNSCaller{}}
 	handler.Groups = map[string]*Group{"clean": {Callers: callers}}
 
-	mocker := mocker.Mocker{}
+	mocker := mock.Mocker{}
 	defer mocker.Reset()
 	// 测试Resolve
 	mocker.MethodSeq(caller2, "Resolve", []gomonkey.Params{
@@ -84,7 +84,7 @@ func TestHandler(t *testing.T) {
 
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
-	mocker := mocker.Mocker{}
+	mocker := mock.Mocker{}
 	defer mocker.Reset()
 
 	// 测试HitHosts
@@ -154,7 +154,7 @@ func TestGroup(t *testing.T) {
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
 
-	mocker := mocker.Mocker{}
+	mocker := mock.Mocker{}
 	defer mocker.Reset()
 
 	ipv4 := net.IPv4(1, 1, 1, 1)

@@ -2,10 +2,10 @@ package outbound
 
 import (
 	"fmt"
-	mock "github.com/agiledragon/gomonkey"
+	"github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	"github.com/wolf-joe/ts-dns/core/mocker"
+	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
@@ -26,12 +26,12 @@ func assertSuccess(t *testing.T, val *dns.Msg, err error) {
 	assert.Nil(t, err)
 }
 
-func MockMethodSeq(target interface{}, methodName string, outputs []mock.Params) *mock.Patches {
-	var cells []mock.OutputCell
+func MockMethodSeq(target interface{}, methodName string, outputs []gomonkey.Params) *gomonkey.Patches {
+	var cells []gomonkey.OutputCell
 	for _, output := range outputs {
-		cells = append(cells, mock.OutputCell{Values: output})
+		cells = append(cells, gomonkey.OutputCell{Values: output})
 	}
-	return mock.ApplyMethodSeq(reflect.TypeOf(target), methodName, cells)
+	return gomonkey.ApplyMethodSeq(reflect.TypeOf(target), methodName, cells)
 }
 
 func TestDNSCaller(t *testing.T) {
@@ -39,7 +39,7 @@ func TestDNSCaller(t *testing.T) {
 
 	caller := NewDNSCaller("", "", nil)
 	// 不使用代理，mock掉Exchange
-	p := MockMethodSeq(caller.client, "Exchange", []mock.Params{
+	p := MockMethodSeq(caller.client, "Exchange", []gomonkey.Params{
 		{nil, time.Second, fmt.Errorf("err")},
 		{&dns.Msg{}, time.Second, nil},
 	})
@@ -52,14 +52,14 @@ func TestDNSCaller(t *testing.T) {
 
 	caller = NewDoTCaller("", "", dialer)
 	// 使用代理，mock掉Dial、WriteMsg、ReadMsg
-	p1 := MockMethodSeq(caller.proxy, "Dial", []mock.Params{
+	p1 := MockMethodSeq(caller.proxy, "Dial", []gomonkey.Params{
 		{nil, fmt.Errorf("err")},
 		{&net.TCPConn{}, nil}, {&net.TCPConn{}, nil}, {&net.TCPConn{}, nil},
 	})
-	p2 := MockMethodSeq(caller.conn, "WriteMsg", []mock.Params{
+	p2 := MockMethodSeq(caller.conn, "WriteMsg", []gomonkey.Params{
 		{fmt.Errorf("err")}, {nil}, {nil},
 	})
-	p3 := MockMethodSeq(caller.conn, "ReadMsg", []mock.Params{
+	p3 := MockMethodSeq(caller.conn, "ReadMsg", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&dns.Msg{}, nil},
 	})
 	defer func() { p.Reset(); p1.Reset(); p2.Reset(); p3.Reset() }()
@@ -78,7 +78,7 @@ func TestDNSCaller(t *testing.T) {
 }
 
 func TestDoHCaller(t *testing.T) {
-	mocker := mocker.Mocker{}
+	mocker := mock.Mocker{}
 	defer mocker.Reset()
 
 	req := &dns.Msg{}
@@ -101,7 +101,7 @@ func TestDoHCaller(t *testing.T) {
 	assert.NotNil(t, caller)
 	assert.Equal(t, caller.port, "80")
 	// 测试.Resolve
-	mocker.FuncSeq(net.LookupIP, []mock.Params{
+	mocker.FuncSeq(net.LookupIP, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {[]net.IP{nil}, nil}, {[]net.IP{{1, 1, 1, 1}}, nil},
 	})
 	err = caller.Resolve() // LookupIP返回异常
@@ -120,20 +120,20 @@ func TestDoHCaller(t *testing.T) {
 	assert.NotNil(t, err)
 
 	caller.Servers = []string{"1.1.1.1"}
-	mocker.MethodSeq(req, "PackBuffer", []mock.Params{
+	mocker.MethodSeq(req, "PackBuffer", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {[]byte{1}, nil}, {[]byte{1}, nil},
 		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
 	})
-	mocker.FuncSeq(http.NewRequest, []mock.Params{
+	mocker.FuncSeq(http.NewRequest, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {httpReq, nil}, {httpReq, nil},
 		{httpReq, nil}, {httpReq, nil},
 	})
-	mocker.MethodSeq(caller.client, "Do", []mock.Params{
+	mocker.MethodSeq(caller.client, "Do", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&http.Response{Body: &net.TCPConn{}}, nil},
 		{&http.Response{Body: &net.TCPConn{}}, nil},
 		{&http.Response{Body: &net.TCPConn{}}, nil},
 	})
-	mocker.FuncSeq(ioutil.ReadAll, []mock.Params{
+	mocker.FuncSeq(ioutil.ReadAll, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {make([]byte, 1), nil},
 		{make([]byte, 12), nil},
 	})
