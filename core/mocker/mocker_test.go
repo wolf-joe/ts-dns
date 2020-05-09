@@ -1,9 +1,10 @@
-package common
+package mocker
 
 import (
 	"github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
+	"github.com/wolf-joe/ts-dns/core/common"
 	"testing"
 )
 
@@ -16,9 +17,9 @@ func TestMocker(t *testing.T) {
 	// mock成功
 	assert.Equal(t, msg.String(), "test string")
 	// 修改FormatSubnet的返回值
-	mocker.FuncSeq(FormatECS, []gomonkey.Params{{"1.1.1.1/32"}})
+	mocker.FuncSeq(common.FormatECS, []gomonkey.Params{{"1.1.1.1/32"}})
 	// mock成功
-	assert.Equal(t, FormatECS(nil), "1.1.1.1/32")
+	assert.Equal(t, common.FormatECS(nil), "1.1.1.1/32")
 	// 取消所有mock
 	assert.Equal(t, len(mocker.patches), 2)
 	mocker.Reset()
@@ -26,5 +27,5 @@ func TestMocker(t *testing.T) {
 	// msg.String()的返回值被重置
 	assert.NotEqual(t, msg.String(), "test string")
 	// FormatSubnet的返回值被重置
-	assert.NotEqual(t, FormatECS(nil), "1.1.1.1/32")
+	assert.NotEqual(t, common.FormatECS(nil), "1.1.1.1/32")
 }

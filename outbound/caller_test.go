@@ -5,7 +5,7 @@ import (
 	mock "github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/core/mocker"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
@@ -78,7 +78,7 @@ func TestDNSCaller(t *testing.T) {
 }
 
 func TestDoHCaller(t *testing.T) {
-	mocker := common.Mocker{}
+	mocker := mocker.Mocker{}
 	defer mocker.Reset()
 
 	req := &dns.Msg{}

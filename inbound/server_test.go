@@ -8,7 +8,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
@@ -51,7 +51,7 @@ func TestHandler_Resolve(t *testing.T) {
 	callers := []outbound.Caller{caller1, caller2, &outbound.DNSCaller{}}
 	handler.Groups = map[string]*Group{"clean": {Callers: callers}}
 
-	mocker := common.Mocker{}
+	mocker := mocker.Mocker{}
 	defer mocker.Reset()
 	// 测试Resolve
 	mocker.MethodSeq(caller2, "Resolve", []gomonkey.Params{
@@ -84,7 +84,7 @@ func TestHandler(t *testing.T) {
 
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
-	mocker := common.Mocker{}
+	mocker := mocker.Mocker{}
 	defer mocker.Reset()
 
 	// 测试HitHosts
@@ -96,7 +96,7 @@ func TestHandler(t *testing.T) {
 	assert.NotNil(t, handler.HitHosts(req)) // Record返回值正常
 
 	// 测试ServeDNS前半部分
-	// mock HitHosts
+	// mocker HitHosts
 	mocker.MethodSeq(handler, "HitHosts", []gomonkey.Params{
 		{resp}, {nil}, {nil}, {nil}, // 前半部分用
 		{nil}, {nil}, {nil},
@@ -110,7 +110,7 @@ func TestHandler(t *testing.T) {
 	})
 	handler.ServeDNS(writer, req) // 命中缓存
 	assert.Equal(t, writer.r, resp)
-	// mock 规则匹配结果
+	// mocker 规则匹配结果
 	mocker.MethodSeq(group.Matcher, "Match", []gomonkey.Params{
 		{true, true}, {true, true}, // 前半部分用，每次只需只包含一次匹配
 		// 后半部分需要两个不匹配跳过规则（可能要再加上GFWList的匹配/不匹配）
@@ -129,7 +129,7 @@ func TestHandler(t *testing.T) {
 	assert.NotNil(t, writer.r)    // CallDNS返回空后直接返回&dns.Msg{}
 
 	// 测试ServeDNS后半部分：CN IP+GFWList
-	// mock allInRange
+	// mocker allInRange
 	mocker.FuncSeq(allInRange, []gomonkey.Params{
 		{true}, {false}, {false},
 	})
@@ -154,7 +154,7 @@ func TestGroup(t *testing.T) {
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
 
-	mocker := common.Mocker{}
+	mocker := mocker.Mocker{}
 	defer mocker.Reset()
 
 	ipv4 := net.IPv4(1, 1, 1, 1)

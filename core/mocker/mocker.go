@@ -1,4 +1,4 @@
-package common
+package mocker
 
 import (
 	"github.com/agiledragon/gomonkey"
