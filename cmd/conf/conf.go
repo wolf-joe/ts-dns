@@ -47,6 +47,7 @@ func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
 	ECS         string
+	NoCookie    bool `toml:"no_cookie"`
 	Socks5      string
 	IPSet       string
 	IPSetTTL    int `toml:"ipset_ttl"`
@@ -222,6 +223,7 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 		inboundGroup := &inbound.Group{
 			Callers: group.GenCallers(), Concurrent: group.Concurrent,
 			FastestV4: group.FastestV4, TCPPingPort: group.TCPPingPort,
+			NoCookie: group.NoCookie,
 		}
 		if inboundGroup.Concurrent {
 			log.Warnln("enable concurrent dns in group " + name)

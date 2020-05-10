@@ -22,6 +22,7 @@ type Group struct {
 	FastestV4   bool
 	TCPPingPort int
 	ECS         *dns.EDNS0_SUBNET
+	NoCookie    bool
 }
 
 // CallDNS 向组内的dns服务器转发请求，可能返回nil
@@ -31,6 +32,9 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	}
 	request = request.Copy()
 	common.SetDefaultECS(request, group.ECS)
+	if group.NoCookie {
+		common.RemoveEDNSCookie(request)
+	}
 	// 并发用的channel
 	ch := make(chan *dns.Msg, len(group.Callers))
 	// 包裹Caller.Call，方便实现并发

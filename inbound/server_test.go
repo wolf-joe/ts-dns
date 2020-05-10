@@ -152,7 +152,8 @@ func TestHandler(t *testing.T) {
 
 func TestGroup(t *testing.T) {
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
-	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
+	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""),
+		IPSet: &ipset.IPSet{}, NoCookie: true}
 
 	mocker := mock.Mocker{}
 	defer mocker.Reset()
