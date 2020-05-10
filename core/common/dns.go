@@ -106,3 +106,22 @@ func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
 		opt.Option = append([]dns.EDNS0{ecs}, opt.Option...)
 	}
 }
+
+// RemoveEDNSCookie 移除EDNS Cookie
+func RemoveEDNSCookie(msg *dns.Msg) {
+	if msg == nil {
+		return
+	}
+	for _, extra := range msg.Extra {
+		switch v := extra.(type) {
+		case *dns.OPT:
+			for i := 0; i < len(v.Option); i++ {
+				switch v.Option[i].(type) {
+				case *dns.EDNS0_COOKIE:
+					v.Option = append(v.Option[:i], v.Option[i+1:]...)
+					i--
+				}
+			}
+		}
+	}
+}

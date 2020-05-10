@@ -75,3 +75,18 @@ func TestSetDefaultECS(t *testing.T) {
 	assert.Equal(t, len(r.Extra[0].(*dns.OPT).Option), 2)
 	assert.Equal(t, FormatECS(r), "1.1.1.1/32")
 }
+
+func TestRemoveEDNSCookie(t *testing.T) {
+	RemoveEDNSCookie(nil)
+	msg := &dns.Msg{}
+	ecs, _ := ParseECS("1.1.1.1")
+	SetDefaultECS(msg, ecs)
+	opt := msg.Extra[0].(*dns.OPT)
+	opt.Option = append(opt.Option, &dns.EDNS0_COOKIE{Code: dns.EDNS0COOKIE, Cookie: "abc"})
+	opt.Option = append(opt.Option, &dns.EDNS0_COOKIE{Code: dns.EDNS0COOKIE, Cookie: "def"})
+	assert.Equal(t, 3, len(opt.Option))
+	RemoveEDNSCookie(msg)
+	assert.Equal(t, 1, len(opt.Option))
+	RemoveEDNSCookie(msg)
+	assert.Equal(t, 1, len(opt.Option))
+}
