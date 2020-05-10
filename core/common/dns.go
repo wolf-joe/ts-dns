@@ -96,7 +96,10 @@ func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
 	log.Debugf("set default ecs %v to msg", ecs)
 	if firstOPTIndex < 0 {
 		// 如果r.Extra为空或所有值都不为*dns.OPT，则在r.Extra的末尾添加一个*dns.OPT
-		r.Extra = append(r.Extra, &dns.OPT{Option: []dns.EDNS0{ecs}})
+		opt := &dns.OPT{Option: []dns.EDNS0{ecs}}
+		opt.SetUDPSize(4096)
+		opt.Hdr.Name, opt.Hdr.Rrtype = ".", dns.TypeOPT
+		r.Extra = append(r.Extra, opt)
 	} else {
 		// 否则在第一个*dns.OPT的Option列表的开头插入ECS对象
 		opt := r.Extra[firstOPTIndex].(*dns.OPT)
