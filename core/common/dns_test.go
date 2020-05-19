@@ -90,3 +90,21 @@ func TestRemoveEDNSCookie(t *testing.T) {
 	RemoveEDNSCookie(msg)
 	assert.Equal(t, 1, len(opt.Option))
 }
+
+func TestRemoveA(t *testing.T) {
+	RemoveA(nil)
+	resp := &dns.Msg{}
+	RemoveA(resp)
+	assert.Equal(t, 0, len(resp.Answer))
+
+	resp.Answer = append(resp.Answer, &dns.CNAME{})
+	assert.Equal(t, 1, len(resp.Answer))
+	RemoveA(resp)
+	assert.Equal(t, 1, len(resp.Answer))
+
+	resp.Answer = append(resp.Answer, &dns.A{})
+	resp.Answer = append(resp.Answer, &dns.A{})
+	assert.Equal(t, 3, len(resp.Answer))
+	RemoveA(resp)
+	assert.Equal(t, 1, len(resp.Answer))
+}

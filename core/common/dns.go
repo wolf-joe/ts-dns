@@ -125,3 +125,17 @@ func RemoveEDNSCookie(msg *dns.Msg) {
 		}
 	}
 }
+
+// RemoveA 移除dns响应中的A记录
+func RemoveA(resp *dns.Msg) {
+	if resp == nil {
+		return
+	}
+	for i := 0; i < len(resp.Answer); i++ {
+		switch resp.Answer[i].(type) {
+		case *dns.A:
+			resp.Answer = append(resp.Answer[:i], resp.Answer[i+1:]...)
+			i--
+		}
+	}
+}

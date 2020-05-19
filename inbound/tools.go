@@ -91,7 +91,8 @@ func fastestA(ch chan *dns.Msg, chLen int, tcpPort int) (res *dns.Msg) {
 	}
 	// 用ping最小的ipv4地址覆盖msg
 	if aObj := aMap[fastestIP]; fastestIP != "" && res != nil {
-		res.Answer = []dns.RR{&aObj}
+		common.RemoveA(res)
+		res.Answer = append(res.Answer, &aObj)
 	} else {
 		log.Error("find fastest ipv4 failed")
 	}
