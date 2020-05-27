@@ -2,8 +2,8 @@ package cache
 
 import (
 	"github.com/miekg/dns"
+	"github.com/valyala/fastrand"
 	"github.com/wolf-joe/ts-dns/core/common"
-	"math/rand"
 	"strconv"
 	"time"
 )
@@ -31,18 +31,19 @@ func (entry *cacheEntry) Get() *dns.Msg {
 	for i := 0; i < len(r.Answer); i++ { // 倒计时ttl
 		r.Answer[i].Header().Ttl = uint32(ttl)
 	}
-	first := -1 // 打乱ip响应顺序
-	for i := len(r.Answer) - 1; i >= 0; i-- {
-		if t := r.Answer[i].Header().Rrtype; t != dns.TypeA && t != dns.TypeAAAA {
+	// 打乱ip响应顺序
+	first := uint32(len(r.Answer))
+	for ; first > 0; first-- {
+		if t := r.Answer[first-1].Header().Rrtype; t != dns.TypeA && t != dns.TypeAAAA {
 			break
 		}
-		first = i
 	}
-	if first >= 0 {
-		rand.Seed(time.Now().UnixNano()) // random record order
-		rand.Shuffle(len(r.Answer)-first, func(i, j int) {
-			r.Answer[first+i], r.Answer[first+j] = r.Answer[first+j], r.Answer[first+i]
-		})
+	ips := r.Answer[first:] // 切片不重新分配内存，修改ips相当于直接修改r.Answer
+	if len(ips) > 1 {
+		for i := uint32(len(ips) - 1); i > 0; i-- {
+			j := fastrand.Uint32n(i + 1)
+			ips[i], ips[j] = ips[j], ips[i]
+		}
 	}
 	return r
 }
