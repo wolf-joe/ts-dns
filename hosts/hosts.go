@@ -30,6 +30,7 @@ type TextReader struct {
 
 // IP 获取hostname对应的ip地址，如不存在则返回空串
 func (r *TextReader) IP(hostname string, ipv6 bool) string {
+	hostname = strings.ToLower(hostname)
 	hostMap, regMap := r.v4Map, r.v4Reg
 	if ipv6 {
 		hostMap, regMap = r.v6Map, r.v6Reg
