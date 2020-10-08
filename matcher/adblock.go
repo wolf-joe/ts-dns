@@ -20,6 +20,7 @@ func (matcher *ABPlus) Match(domain string) (matched bool, ok bool) {
 	if domain == "" {
 		return
 	}
+	domain = strings.ToLower(domain)
 	if domain[len(domain)-1] == '.' {
 		domain = domain[:len(domain)-1] // 移除域名末尾的根域名
 	}
@@ -121,6 +122,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 		if !tldReg.MatchString(tld) && !idnReg.MatchString(tld) {
 			continue // 无效域名
 		}
+		domain = strings.ToLower(domain)
 		matcher.isBlocked[domain] = line[:2] != "@@"
 	}
 	return matcher
