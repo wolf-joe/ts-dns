@@ -5,6 +5,7 @@ import (
 	"github.com/valyala/fastrand"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -55,6 +56,7 @@ func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
 	if subnet := common.FormatECS(request); subnet != "" {
 		cacheKey += "." + subnet
 	}
+	cacheKey = strings.ToLower(cacheKey)
 	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
 		r := cacheHit.(*cacheEntry).Get()
 		return r
@@ -72,6 +74,7 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	if subnet := common.FormatECS(request); subnet != "" {
 		cacheKey += "." + subnet
 	}
+	cacheKey = strings.ToLower(cacheKey)
 	var ex = cache.maxTTL
 	for _, answer := range r.Answer {
 		if ttl := time.Duration(answer.Header().Ttl) * time.Second; ttl < ex {
