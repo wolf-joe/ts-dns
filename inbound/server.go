@@ -1,16 +1,17 @@
 package inbound
 
 import (
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/core/context"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
-	"strings"
-	"sync"
 )
 
 // Group 各域名组相关配置
@@ -26,7 +27,7 @@ type Group struct {
 }
 
 // CallDNS 向组内的dns服务器转发请求，可能返回nil
-func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
+func (group *Group) CallDNS(ctx *context.Context, request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
@@ -41,14 +42,14 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 	call := func(caller outbound.Caller, request *dns.Msg) *dns.Msg {
 		r, err := caller.Call(request)
 		if err != nil {
-			log.Errorf("query dns error: %v", err)
+			log.WithFields(ctx.Fields()).Errorf("query dns error: %v", err)
 		}
 		ch <- r
 		return r
 	}
 	// 遍历DNS服务器
 	for _, caller := range group.Callers {
-		log.Debugf("forward question %v to %v", request.Question, caller)
+		log.WithFields(ctx.Fields()).Debugf("forward question %v to %v", request.Question, caller)
 		if group.Concurrent || group.FastestV4 {
 			go call(caller, request)
 		} else if r := call(caller, request); r != nil {
@@ -69,13 +70,13 @@ func (group *Group) CallDNS(request *dns.Msg) *dns.Msg {
 }
 
 // AddIPSet 将dns响应中所有的ipv4地址加入group指定的ipset
-func (group *Group) AddIPSet(r *dns.Msg) {
+func (group *Group) AddIPSet(ctx *context.Context, r *dns.Msg) {
 	if group.IPSet == nil || r == nil {
 		return
 	}
 	for _, a := range common.ExtractA(r) {
 		if err := group.IPSet.Add(a.A.String(), group.IPSet.Timeout); err != nil {
-			log.Errorf("add ipset error: %v", err)
+			log.WithFields(ctx.Fields()).Errorf("add ipset error: %v", err)
 		}
 	}
 	return
@@ -96,7 +97,7 @@ type Handler struct {
 }
 
 // HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
-func (handler *Handler) HitHosts(request *dns.Msg) *dns.Msg {
+func (handler *Handler) HitHosts(ctx *context.Context, request *dns.Msg) *dns.Msg {
 	question := request.Question[0]
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
@@ -108,7 +109,7 @@ func (handler *Handler) HitHosts(request *dns.Msg) *dns.Msg {
 			}
 			if record != "" {
 				if ret, err := dns.NewRR(record); err != nil {
-					log.Errorf("make DNS.RR error: %v", err)
+					log.WithFields(ctx.Fields()).Errorf("make DNS.RR error: %v", err)
 				} else {
 					r := new(dns.Msg)
 					r.Answer = append(r.Answer, ret)
@@ -121,19 +122,18 @@ func (handler *Handler) HitHosts(request *dns.Msg) *dns.Msg {
 }
 
 // LogQuery 记录请求日志
-func (handler *Handler) LogQuery(resp dns.ResponseWriter, question dns.Question, msg, group string) {
-	fields := log.Fields{"domain": question.Name, "type": dns.Type(question.Qtype).String()}
-	src := resp.RemoteAddr().String()
-	fields["src"] = src[:strings.LastIndex(src, ":")]
+func (handler *Handler) LogQuery(fields log.Fields, msg, group string) {
+	entry := handler.QueryLogger.WithFields(fields)
 	if group != "" {
-		fields["group"] = group
+		entry = entry.WithField("GROUP", group)
 	}
-	handler.QueryLogger.WithFields(fields).Info(msg)
+	entry.Info(msg)
 }
 
 // ServeDNS 处理dns请求，程序核心函数
 func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	handler.Mux.RLock() // 申请读锁，持续整个请求
+	ctx := context.NewContext(resp, request)
 	var r *dns.Msg
 	var group *Group
 	defer func() {
@@ -141,29 +141,30 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			r = &dns.Msg{}
 		}
 		r.SetReply(request) // 写入响应
-		log.Debug("response: ", r.Answer)
+		log.WithFields(ctx.Fields()).Debugf("response: %q", r.Answer)
 		_ = resp.WriteMsg(r)
 		if group != nil {
-			group.AddIPSet(r) // 写入IPSet
+			group.AddIPSet(ctx, r) // 写入IPSet
 		}
 		handler.Mux.RUnlock() // 读锁解除
 		_ = resp.Close()      // 结束连接
 	}()
 
 	question := request.Question[0]
-	log.Debugf("question: %v, extract: %v", request.Question, request.Extra)
+	log.WithFields(ctx.Fields()).
+		Debugf("question: %q, extract: %q", request.Question, request.Extra)
 	if handler.DisableIPv6 && question.Qtype == dns.TypeAAAA {
 		r = &dns.Msg{}
 		return // 禁用IPv6时直接返回
 	}
 	// 检测是否命中hosts
-	if r = handler.HitHosts(request); r != nil {
-		handler.LogQuery(resp, question, "hit hosts", "")
+	if r = handler.HitHosts(ctx, request); r != nil {
+		handler.LogQuery(ctx.Fields(), "hit hosts", "")
 		return
 	}
 	// 检测是否命中dns缓存
 	if r = handler.Cache.Get(request); r != nil {
-		handler.LogQuery(resp, question, "hit cache", "")
+		handler.LogQuery(ctx.Fields(), "hit cache", "")
 		return
 	}
 
@@ -171,8 +172,8 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var name string
 	for name, group = range handler.Groups {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
-			handler.LogQuery(resp, question, "match by rules", name)
-			r = group.CallDNS(request)
+			handler.LogQuery(ctx.Fields(), "match by rules", name)
+			r = group.CallDNS(ctx, request)
 			// 设置dns缓存
 			handler.Cache.Set(request, r)
 			return
@@ -180,18 +181,18 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	// 先用clean组dns解析
 	group = handler.Groups["clean"] // 设置group变量以在defer里添加ipset
-	r = group.CallDNS(request)
+	r = group.CallDNS(ctx, request)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
-		handler.LogQuery(resp, question, "cn/empty ipv4", "clean")
+		handler.LogQuery(ctx.Fields(), "cn/empty ipv4", "clean")
 	} else if blocked, ok := handler.GFWMatcher.Match(question.Name); !ok || !blocked {
 		// 出现非cn ip但域名不匹配gfwlist，流程结束
-		handler.LogQuery(resp, question, "not match gfwlist", "clean")
+		handler.LogQuery(ctx.Fields(), "not match gfwlist", "clean")
 	} else {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
-		handler.LogQuery(resp, question, "match gfwlist", "dirty")
+		handler.LogQuery(ctx.Fields(), "match gfwlist", "dirty")
 		group = handler.Groups["dirty"] // 设置group变量以在defer里添加ipset
-		r = group.CallDNS(request)
+		r = group.CallDNS(ctx, request)
 	}
 	// 设置dns缓存
 	handler.Cache.Set(request, r)

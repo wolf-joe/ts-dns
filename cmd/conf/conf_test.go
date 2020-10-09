@@ -9,6 +9,7 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/core/context"
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
@@ -182,12 +183,12 @@ func TestQueryFormatter(t *testing.T) {
 		ignoreQTypes: []string{"A", "NS"}, ignoreHosts: true, ignoreCache: true,
 	})
 	// 测试ignoreQTypes
-	fields := log.Fields{"domain": "ip.cn.", "type": "A"}
+	fields := log.Fields{context.QuestionKey: "ip.cn.", context.QTypeKey: "A"}
 	logger.WithFields(fields).Info("msg")
-	fields["type"] = "NS"
+	fields[context.QTypeKey] = "NS"
 	logger.WithFields(fields).Info("msg")
 	assert.Empty(t, buffer.String())
-	fields["type"] = "PTR"
+	fields[context.QTypeKey] = "PTR"
 	logger.WithFields(fields).Info("msg")
 	assert.NotEmpty(t, buffer.String())
 	// 测试ignoreHosts

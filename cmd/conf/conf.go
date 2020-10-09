@@ -7,6 +7,7 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/core/context"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
 	"github.com/wolf-joe/ts-dns/matcher"
@@ -31,7 +32,7 @@ type queryFormatter struct {
 func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
 	var ignore []byte
 	for _, qType := range f.ignoreQTypes {
-		if entry.Data["type"] == qType {
+		if entry.Data[context.QTypeKey] == qType {
 			return ignore, nil
 		}
 	}
