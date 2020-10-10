@@ -26,3 +26,10 @@ func TestNewContext(t *testing.T) {
 	assert.NotEmpty(t, fields[QTypeKey])
 	assert.NotEmpty(t, fields[SrcKey])
 }
+
+func TestConcurrent(t *testing.T) {
+	ctx := NewEmptyContext(123)
+	for i := 0; i < 10; i++ {
+		go ctx.Fields()
+	}
+}

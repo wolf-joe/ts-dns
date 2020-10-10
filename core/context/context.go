@@ -25,13 +25,16 @@ type Context struct {
 }
 
 func (ctx *Context) Fields() logrus.Fields {
-	_, file, no, ok := runtime.Caller(1)
-	delete(ctx.fields, LocationKey)
-	if ok {
-		file = filepath.Base(file)
-		ctx.fields[LocationKey] = fmt.Sprintf("%s:%d", file, no)
+	// shallow copy
+	fields := make(map[string]interface{}, len(ctx.fields))
+	for k, v := range ctx.fields {
+		fields[k] = v
 	}
-	return ctx.fields
+	if _, file, no, ok := runtime.Caller(1); ok {
+		file = filepath.Base(file)
+		fields[LocationKey] = fmt.Sprintf("%s:%d", file, no)
+	}
+	return fields
 }
 
 func NewContext(writer dns.ResponseWriter, request *dns.Msg) *Context {
