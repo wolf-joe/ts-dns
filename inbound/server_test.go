@@ -83,6 +83,13 @@ func TestHandler(t *testing.T) {
 	assert.NotNil(t, writer.r)
 	assert.Equal(t, len(writer.r.Answer), 0)
 
+	// 测试DisableIPv6
+	handler.DisableIPv6 = false
+	handler.DisableQTypes = map[string]bool{"AAAA": true}
+	handler.ServeDNS(writer, req)
+	assert.NotNil(t, writer.r)
+	assert.Equal(t, len(writer.r.Answer), 0)
+
 	req.SetQuestion("ip.cn.", dns.TypeA)
 
 	mocker := mock.Mocker{}

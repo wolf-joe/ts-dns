@@ -134,6 +134,7 @@ func TestNewHandler(t *testing.T) {
 	p := gomonkey.ApplyFunc(toml.DecodeFile,
 		func(fn string, conf interface{}) (toml.MetaData, error) {
 			conf.(*Conf).DisableIPv6 = true
+			conf.(*Conf).DisableQTypes = []string{"HTTPS"}
 			conf.(*Conf).Listen = ":53/tcp"
 			return toml.MetaData{}, nil
 		})
