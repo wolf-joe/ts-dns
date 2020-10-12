@@ -84,16 +84,17 @@ func (group *Group) AddIPSet(ctx *context.Context, r *dns.Msg) {
 
 // Handler 存储主要配置的dns请求处理器，程序核心
 type Handler struct {
-	Mux          *sync.RWMutex
-	Listen       string
-	Network      string
-	DisableIPv6  bool
-	Cache        *cache.DNSCache
-	GFWMatcher   *matcher.ABPlus
-	CNIP         *cache.RamSet
-	HostsReaders []hosts.Reader
-	Groups       map[string]*Group
-	QueryLogger  *log.Logger
+	Mux           *sync.RWMutex
+	Listen        string
+	Network       string
+	DisableIPv6   bool
+	Cache         *cache.DNSCache
+	GFWMatcher    *matcher.ABPlus
+	CNIP          *cache.RamSet
+	HostsReaders  []hosts.Reader
+	Groups        map[string]*Group
+	QueryLogger   *log.Logger
+	DisableQTypes map[string]bool
 }
 
 // HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
@@ -156,6 +157,10 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	if handler.DisableIPv6 && question.Qtype == dns.TypeAAAA {
 		r = &dns.Msg{}
 		return // 禁用IPv6时直接返回
+	}
+	if qType := dns.TypeToString[question.Qtype]; handler.DisableQTypes[qType] {
+		r = &dns.Msg{}
+		return // 禁用指定查询类型
 	}
 	// 检测是否命中hosts
 	if r = handler.HitHosts(ctx, request); r != nil {

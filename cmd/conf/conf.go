@@ -2,6 +2,12 @@ package conf
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	log "github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
@@ -13,11 +19,6 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
-	"io/ioutil"
-	"os"
-	"strings"
-	"sync"
-	"time"
 )
 
 // 自定义查询日志的输出格式
@@ -153,16 +154,17 @@ func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
 
 // Conf 配置文件总体结构
 type Conf struct {
-	Listen      string
-	GFWList     string
-	GFWb64      bool `toml:"gfwlist_b64"`
-	CNIP        string
-	Logger      *QueryLog `toml:"query_log"`
-	HostsFiles  []string  `toml:"hosts_files"`
-	Hosts       map[string]string
-	Cache       *Cache
-	Groups      map[string]*Group
-	DisableIPv6 bool `toml:"disable_ipv6"`
+	Listen        string
+	GFWList       string
+	GFWb64        bool `toml:"gfwlist_b64"`
+	CNIP          string
+	Logger        *QueryLog `toml:"query_log"`
+	HostsFiles    []string  `toml:"hosts_files"`
+	Hosts         map[string]string
+	Cache         *Cache
+	Groups        map[string]*Group
+	DisableIPv6   bool     `toml:"disable_ipv6"`
+	DisableQTypes []string `toml:"disable_qtypes"`
 }
 
 // SetDefault 为部分字段默认配置
@@ -268,6 +270,12 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	handler.DisableIPv6 = config.DisableIPv6
 	if handler.DisableIPv6 {
 		log.Warn("disable ipv6 resolve")
+	}
+	handler.DisableQTypes = map[string]bool{}
+	for _, qType := range config.DisableQTypes {
+		if qType = strings.TrimSpace(qType); qType != "" {
+			handler.DisableQTypes[strings.ToUpper(qType)] = true
+		}
 	}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, config.GFWb64); err != nil {

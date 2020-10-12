@@ -11,7 +11,7 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/janeczku/go-ipset v0.0.0-20170206212442-499ed3217c4b
-	github.com/miekg/dns v1.1.28
+	github.com/miekg/dns v1.1.32
 	github.com/sparrc/go-ping v0.0.0-20190613174326-4e5b6552494c
 	github.com/stretchr/testify v1.2.2
 	github.com/valyala/fastrand v1.0.0
