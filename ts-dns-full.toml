@@ -5,7 +5,7 @@ listen = ":53/udp"  # 监听端口，支持指定tcp/udp，不指定时默认同
 gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官方地址：https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
 gfwlist_b64 = true  # 是否使用base64解码gfwlist文件，默认为true
 cnip = "cnip.txt"  # 中国ip网段列表，用于辅助域名分组
-disable_ipv6 = true  # 禁用IPv6地址解析，默认为false
+disable_qtypes = ["AAAA", "HTTPS"]  # 屏蔽IPv6/HTTPS查询
 
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 [hosts] # 自定义域名映射
