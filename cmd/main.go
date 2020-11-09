@@ -3,14 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/fsnotify/fsnotify"
-	"github.com/miekg/dns"
-	"github.com/wolf-joe/ts-dns/cmd/conf"
-	"github.com/wolf-joe/ts-dns/inbound"
 	"os"
 	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/fsnotify/fsnotify"
+	"github.com/miekg/dns"
+	"github.com/wolf-joe/ts-dns/core/model"
+	"github.com/wolf-joe/ts-dns/inbound"
 )
 
 // VERSION 程序版本号
@@ -32,7 +33,7 @@ func main() {
 		log.Debug("show debug log")
 	}
 	// 读取配置文件
-	handler, err := conf.NewHandler(*filename)
+	handler, err := model.NewHandler(*filename)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -92,7 +93,7 @@ func autoReload(handle *inbound.Handler, filename string) {
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
 				log.WithFields(fields).Warnf("file changed, reloading")
-				if newHandler, err := conf.NewHandler(filename); err == nil {
+				if newHandler, err := model.NewHandler(filename); err == nil {
 					newHandler.ResolveDoH()
 					handle.Refresh(newHandler)
 				}

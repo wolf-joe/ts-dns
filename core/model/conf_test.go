@@ -1,8 +1,11 @@
-package conf
+package model
 
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/BurntSushi/toml"
 	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
@@ -13,8 +16,6 @@ import (
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
-	"os"
-	"testing"
 )
 
 func TestQueryLog(t *testing.T) {
