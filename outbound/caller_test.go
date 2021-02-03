@@ -2,17 +2,19 @@ package outbound
 
 import (
 	"fmt"
-	"github.com/agiledragon/gomonkey"
-	"github.com/miekg/dns"
-	"github.com/stretchr/testify/assert"
-	mock "github.com/wolf-joe/ts-dns/core/mocker"
-	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"reflect"
 	"testing"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/agiledragon/gomonkey"
+	"github.com/miekg/dns"
+	"github.com/stretchr/testify/assert"
+	mock "github.com/wolf-joe/ts-dns/core/mocker"
+	"golang.org/x/net/proxy"
 )
 
 var dialer, _ = proxy.SOCKS5("tcp", "", nil, proxy.Direct)
@@ -156,4 +158,107 @@ func TestDoHCaller(t *testing.T) {
 	// Pack、NewRequest、Do、ReadAll、Unpack成功
 	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
+}
+
+func wrapperHandler(serveDNS func(req *dns.Msg) *dns.Msg) dns.HandlerFunc {
+	handlerFunc := func(writer dns.ResponseWriter, req *dns.Msg) {
+		defer func() { _ = writer.Close() }()
+		resp := serveDNS(req)
+		if resp != nil {
+			resp.SetReply(req)
+		}
+		_ = writer.WriteMsg(resp)
+	}
+	return handlerFunc
+}
+
+func TestDoHCallerV2(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+
+	// 测试解析url失败的case
+	caller, err := NewDoHCallerV2("\n", nil, nil)
+	assert.NotNil(t, err)
+	caller, err = NewDoHCallerV2("abc", nil, nil)
+	assert.NotNil(t, err)
+	caller, err = NewDoHCallerV2("https://abc::/", nil, nil)
+	assert.NotNil(t, err)
+
+	url := "https://dns.alidns.com/dns-query"
+
+	// 测试run和stop
+	caller, err = NewDoHCallerV2(url, nil, nil)
+	assert.Nil(t, err)
+	caller.Stop()
+	go func(c *DoHCallerV2) {
+		time.Sleep(time.Millisecond * 100)
+		c.Stop()
+	}(caller)
+	caller.run(time.After(0))
+
+	req := &dns.Msg{
+		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
+		Question: []dns.Question{{Name: "BAIDU.COM.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
+	}
+	resolver := wrapperHandler(func(req *dns.Msg) *dns.Msg {
+		time.Sleep(time.Second * 3)
+		return nil
+	})
+
+	// 测试解析超时的case
+	caller, err = NewDoHCallerV2(url, nil, resolver)
+	assert.Nil(t, err)
+	_, err = caller.Call(req)
+	assert.NotNil(t, err) // timeout
+	caller.Stop()
+
+	resolver = wrapperHandler(func(req *dns.Msg) *dns.Msg {
+		return &dns.Msg{Answer: []dns.RR{
+			&dns.A{A: net.IPv4(223, 5, 5, 5)},
+		}}
+	})
+
+	mocker := mock.Mocker{}
+	defer mocker.Reset()
+	httpReq := &http.Request{Header: map[string][]string{}}
+	mocker.MethodSeq(req, "PackBuffer", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {[]byte{1}, nil}, {[]byte{1}, nil},
+		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
+	})
+	mocker.FuncSeq(http.NewRequest, []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {httpReq, nil}, {httpReq, nil},
+		{httpReq, nil}, {httpReq, nil},
+	})
+	mocker.MethodSeq(&http.Client{}, "Do", []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {&http.Response{Body: &net.TCPConn{}}, nil},
+		{&http.Response{Body: &net.TCPConn{}}, nil},
+		{&http.Response{Body: &net.TCPConn{}}, nil},
+	})
+	mocker.FuncSeq(ioutil.ReadAll, []gomonkey.Params{
+		{nil, fmt.Errorf("err")}, {make([]byte, 1), nil},
+		{make([]byte, 12), nil},
+	})
+
+	// 测试正常解析的case
+	caller, err = NewDoHCallerV2(url, nil, resolver)
+	assert.Nil(t, err)
+	// Pack失败
+	resp, err := caller.Call(req)
+	assert.NotNil(t, err)
+	// Pack成功，但NewRequest失败
+	resp, err = caller.Call(req)
+	assert.NotNil(t, err)
+	// Pack、NewRequest成功，但Do失败
+	resp, err = caller.Call(req)
+	assert.NotNil(t, err)
+	// Pack、NewRequest、Do成功，但ReadAll失败
+	resp, err = caller.Call(req)
+	assert.NotNil(t, err)
+	// Pack、NewRequest、Do、ReadAll成功，但Unpack失败
+	resp, err = caller.Call(req)
+	assert.NotNil(t, err)
+	// Pack、NewRequest、Do、ReadAll、Unpack成功
+	resp, err = caller.Call(req)
+	assert.Nil(t, err)
+	assert.NotNil(t, resp)
+	caller.Stop()
 }

@@ -4,16 +4,22 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
-	"github.com/miekg/dns"
-	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/miekg/dns"
+	"github.com/valyala/fastrand"
+	mock "github.com/wolf-joe/ts-dns/core/mocker"
+	"golang.org/x/net/proxy"
 )
 
 // Caller 上游DNS请求基类
@@ -154,4 +160,178 @@ func NewDoHCaller(rawURL string, proxy proxy.Dialer) (caller *DoHCaller, err err
 		return proxy.Dial(network, addr)
 	}}}
 	return &DoHCaller{client: client, port: port, url: u.String(), Host: host}, nil
+}
+
+// DoHCallerV2 DoT请求类，通过resolver自动解析域名
+type DoHCallerV2 struct {
+	host     string
+	port     string
+	url      string
+	clients  []*http.Client
+	rwMux    sync.RWMutex
+	resolver dns.Handler
+	dialer   proxy.Dialer
+
+	satisfyCh chan interface{} // 域名解析完成
+	requireCh chan interface{} // 要求解析域名
+	cancelCh  chan interface{} // stop run()
+}
+
+// 后台goroutine，负责定时/按需解析DoH服务器域名
+func (caller *DoHCallerV2) run(tick <-chan time.Time) {
+	log.Debugf("doh caller %p run", caller)
+	for {
+		select {
+		case <-tick:
+			caller.rwMux.Lock()
+			caller.resolve()
+			caller.rwMux.Unlock()
+		case <-caller.requireCh: // getClient()触发
+			caller.rwMux.Lock()
+			if len(caller.clients) == 0 {
+				caller.resolve()
+			}
+			caller.rwMux.Unlock()
+			caller.satisfyCh <- struct{}{} // 通知getClient()
+		case <-caller.cancelCh:
+			log.Debugf("doh caller %p stopped", caller)
+			return
+		}
+	}
+}
+
+// Stop 停止后台goroutine。需要在caller不再使用时调用一次
+func (caller *DoHCallerV2) Stop() {
+	caller.cancelCh <- struct{}{}
+}
+
+// 使用resolver，将host解析成ipv4并生成clients
+func (caller *DoHCallerV2) resolve() {
+	genClient := func(ip string) *http.Client {
+		return &http.Client{Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+				addr = ip + ":" + caller.port // 重写addr
+				return caller.dialer.Dial(network, addr)
+			},
+		}}
+	}
+	name := caller.host + "."
+	// 模拟dns请求
+	req := &dns.Msg{
+		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
+		Question: []dns.Question{{Name: name, Qtype: dns.TypeA, Qclass: dns.ClassINET}},
+	}
+	writer := &mock.FakeRespWriter{}
+	done := make(chan interface{}, 1)
+	go func() {
+		if caller.resolver != nil {
+			caller.resolver.ServeDNS(writer, req)
+		}
+		done <- struct{}{}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		return // 超时直接结束
+	}
+	// 解析响应中的ipv4地址
+	clients := make([]*http.Client, 0, 2)
+	if writer.Msg != nil {
+		for _, rr := range writer.Msg.Answer {
+			switch resp := rr.(type) {
+			case *dns.A:
+				clients = append(clients, genClient(resp.A.String()))
+			}
+		}
+	}
+	if len(clients) > 0 {
+		caller.clients = clients
+	}
+}
+
+// 获取一个用于发送DoH查询请求的http客户端
+func (caller *DoHCallerV2) getClient() *http.Client {
+	caller.rwMux.RLock()
+	defer caller.rwMux.RUnlock()
+	var n int
+	if n = len(caller.clients); n == 0 { // 域名未解析
+		caller.rwMux.RUnlock()
+		caller.requireCh <- struct{}{} // 要求解析域名
+		<-caller.satisfyCh             // 等待解析完成
+		caller.rwMux.RLock()
+		if n = len(caller.clients); n == 0 {
+			return nil
+		}
+		goto CHOICE
+	}
+CHOICE:
+	return caller.clients[fastrand.Uint32n(uint32(n))]
+}
+
+// Call 向上游DNS转发请求
+func (caller *DoHCallerV2) Call(request *dns.Msg) (r *dns.Msg, err error) {
+	client := caller.getClient()
+	if client == nil {
+		return nil, errors.New("empty client for doh caller")
+	}
+	// 解包dns请求
+	var buf []byte
+	if buf, err = request.Pack(); err != nil {
+		return nil, err
+	}
+	// 打包http请求
+	var req *http.Request
+	contentType, payload := "application/dns-message", bytes.NewBuffer(buf)
+	if req, err = http.NewRequest("POST", caller.url, payload); err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	// 发送http请求
+	var resp *http.Response
+	if resp, err = client.Do(req); err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// 解包http响应
+	var body []byte
+	if body, err = ioutil.ReadAll(resp.Body); err != nil {
+		return nil, err
+	}
+	// 打包dns响应
+	msg := new(dns.Msg)
+	if err = msg.Unpack(body); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+// NewDoHCallerV2 创建一个DoHCaller，需要服务器url，可选代理。resolver用于解析DoH域名
+func NewDoHCallerV2(rawURL string, dialer proxy.Dialer, resolver dns.Handler) (*DoHCallerV2, error) {
+	// 解析url
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if !u.IsAbs() {
+		return nil, fmt.Errorf("rawURL should be abs url")
+	}
+	// 提取host、port
+	var host, port string
+	if i := strings.LastIndex(u.Host, ":"); i == -1 {
+		u.Host += ":443"
+	}
+	if host, port, err = net.SplitHostPort(u.Host); err != nil {
+		return nil, err
+	}
+
+	if dialer == nil {
+		dialer = &net.Dialer{Timeout: time.Second * 3}
+	}
+	caller := &DoHCallerV2{host: host, port: port, url: u.String(),
+		rwMux: sync.RWMutex{}, resolver: resolver, dialer: dialer}
+	caller.requireCh = make(chan interface{}, 1)
+	caller.satisfyCh = make(chan interface{}, 1)
+	caller.cancelCh = make(chan interface{}, 1)
+	go caller.run(time.Tick(time.Hour * 24))
+	return caller, nil
 }
