@@ -52,6 +52,9 @@ func TestDNSCaller(t *testing.T) {
 	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
 
+	caller.Exit()
+	_ = caller.String()
+
 	caller = NewDoTCaller("", "", dialer)
 	// 使用代理，mock掉Dial、WriteMsg、ReadMsg
 	p1 := MockMethodSeq(caller.proxy, "Dial", []gomonkey.Params{
@@ -77,6 +80,9 @@ func TestDNSCaller(t *testing.T) {
 	// Dial、WriteMsg、ReadMsg都成功
 	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
+
+	caller.Exit()
+	_ = caller.String()
 }
 
 func TestDoHCaller(t *testing.T) {
@@ -158,6 +164,9 @@ func TestDoHCaller(t *testing.T) {
 	// Pack、NewRequest、Do、ReadAll、Unpack成功
 	r, err = caller.Call(req)
 	assertSuccess(t, r, err)
+
+	caller.Exit()
+	_ = caller.String()
 }
 
 func wrapperHandler(serveDNS func(req *dns.Msg) *dns.Msg) dns.HandlerFunc {
@@ -176,24 +185,25 @@ func TestDoHCallerV2(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
 	// 测试解析url失败的case
-	caller, err := NewDoHCallerV2("\n", nil, nil)
+	caller, err := NewDoHCallerV2("\n", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("abc", nil, nil)
+	caller, err = NewDoHCallerV2("abc", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("https://abc::/", nil, nil)
+	caller, err = NewDoHCallerV2("https://abc::/", nil)
 	assert.NotNil(t, err)
 
 	url := "https://dns.alidns.com/dns-query"
 
 	// 测试run和stop
-	caller, err = NewDoHCallerV2(url, nil, nil)
+	caller, err = NewDoHCallerV2(url, nil)
 	assert.Nil(t, err)
-	caller.Stop()
+	caller.Exit()
+	time.Sleep(time.Millisecond * 100) // wait exit
 	go func(c *DoHCallerV2) {
 		time.Sleep(time.Millisecond * 100)
-		c.Stop()
+		c.Exit()
 	}(caller)
-	caller.run(time.After(0))
+	caller.run(time.After(0), time.Second)
 
 	req := &dns.Msg{
 		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
@@ -205,11 +215,12 @@ func TestDoHCallerV2(t *testing.T) {
 	})
 
 	// 测试解析超时的case
-	caller, err = NewDoHCallerV2(url, nil, resolver)
+	caller, err = NewDoHCallerV2(url, nil)
 	assert.Nil(t, err)
+	caller.SetResolver(resolver)
 	_, err = caller.Call(req)
 	assert.NotNil(t, err) // timeout
-	caller.Stop()
+	caller.Exit()
 
 	resolver = wrapperHandler(func(req *dns.Msg) *dns.Msg {
 		return &dns.Msg{Answer: []dns.RR{
@@ -239,8 +250,9 @@ func TestDoHCallerV2(t *testing.T) {
 	})
 
 	// 测试正常解析的case
-	caller, err = NewDoHCallerV2(url, nil, resolver)
+	caller, err = NewDoHCallerV2(url, nil)
 	assert.Nil(t, err)
+	caller.SetResolver(resolver)
 	// Pack失败
 	resp, err := caller.Call(req)
 	assert.NotNil(t, err)
@@ -260,5 +272,12 @@ func TestDoHCallerV2(t *testing.T) {
 	resp, err = caller.Call(req)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
-	caller.Stop()
+
+	// 测试DialContext
+	if len(caller.clients) > 0 {
+		trans := caller.clients[0].Transport.(*http.Transport)
+		_, _ = trans.DialContext(nil, "", "")
+	}
+	caller.Exit()
+	_ = caller.String()
 }
