@@ -41,8 +41,6 @@ func main() {
 		log.Warnf("auto reload " + *filename)
 		go autoReload(handler, *filename)
 	}
-	// 启动dns服务后异步解析DoH服务器域名
-	go func() { time.Sleep(time.Second); handler.ResolveDoH() }()
 	// 启动dns服务，因为可能会同时监听TCP/UDP，所以封装个函数
 	wg := sync.WaitGroup{}
 	runSrv := func(net string) {
@@ -94,7 +92,6 @@ func autoReload(handle *inbound.Handler, filename string) {
 			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
 				log.WithFields(fields).Warnf("file changed, reloading")
 				if newHandler, err := model.NewHandler(filename); err == nil {
-					newHandler.ResolveDoH()
 					handle.Refresh(newHandler)
 				}
 			}

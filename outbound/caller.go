@@ -192,7 +192,7 @@ type DoHCallerV2 struct {
 	dialer   proxy.Dialer
 
 	satisfyCh chan interface{} // 域名解析完成
-	requireCh chan interface{} // 要求解析域名
+	requireCh chan *dns.Msg    // 要求解析域名
 	cancelCh  chan interface{} // stop run()
 }
 
@@ -204,12 +204,12 @@ func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
 		select {
 		case <-tick:
 			caller.rwMux.Lock()
-			caller.resolve(timeout)
+			caller.resolve(nil, timeout)
 			caller.rwMux.Unlock()
-		case <-caller.requireCh: // getClient()触发
+		case req := <-caller.requireCh: // getClient()触发
 			caller.rwMux.Lock()
 			if len(caller.clients) == 0 {
-				caller.resolve(timeout)
+				caller.resolve(req, timeout)
 			}
 			caller.rwMux.Unlock()
 			caller.satisfyCh <- struct{}{} // 通知getClient()
@@ -231,7 +231,7 @@ func (caller *DoHCallerV2) String() string {
 }
 
 // 使用resolver，将host解析成ipv4并生成clients
-func (caller *DoHCallerV2) resolve(timeout time.Duration) {
+func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	fl := common.FileLocStr
 	genClient := func(ip string) *http.Client {
 		return &http.Client{Transport: &http.Transport{
@@ -241,9 +241,13 @@ func (caller *DoHCallerV2) resolve(timeout time.Duration) {
 			},
 		}}
 	}
-	name := caller.host + "."
+	name := strings.ToUpper(caller.host + ".")
+	if srcReq != nil && len(srcReq.Question) > 0 && srcReq.Question[0].Name == name {
+		log.Warnf("[%s] %s call recursive", fl(), caller)
+		return // 可能是回环解析：DoHCaller想通过ts-dns解析自身域名，但ts-dns将请求转发回DoHCaller
+	}
 	// 模拟dns请求
-	req := &dns.Msg{
+	resolveReq := &dns.Msg{
 		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
 		Question: []dns.Question{{Name: name, Qtype: dns.TypeA, Qclass: dns.ClassINET}},
 	}
@@ -251,7 +255,7 @@ func (caller *DoHCallerV2) resolve(timeout time.Duration) {
 	done := make(chan interface{}, 1)
 	go func() {
 		if caller.resolver != nil {
-			caller.resolver.ServeDNS(writer, req)
+			caller.resolver.ServeDNS(writer, resolveReq)
 		}
 		done <- struct{}{}
 	}()
@@ -282,14 +286,14 @@ func (caller *DoHCallerV2) resolve(timeout time.Duration) {
 }
 
 // 获取一个用于发送DoH查询请求的http客户端
-func (caller *DoHCallerV2) getClient() *http.Client {
+func (caller *DoHCallerV2) getClient(req *dns.Msg) *http.Client {
 	caller.rwMux.RLock()
 	defer caller.rwMux.RUnlock()
 	var n int
 	if n = len(caller.clients); n == 0 { // 域名未解析
 		caller.rwMux.RUnlock()
-		caller.requireCh <- struct{}{} // 要求解析域名
-		<-caller.satisfyCh             // 等待解析完成
+		caller.requireCh <- req // 要求解析域名
+		<-caller.satisfyCh      // 等待解析完成
 		caller.rwMux.RLock()
 		if n = len(caller.clients); n == 0 {
 			return nil
@@ -302,7 +306,7 @@ CHOICE:
 
 // Call 向上游DNS转发请求
 func (caller *DoHCallerV2) Call(request *dns.Msg) (r *dns.Msg, err error) {
-	client := caller.getClient()
+	client := caller.getClient(request)
 	if client == nil {
 		return nil, errors.New("empty client for doh caller")
 	}
@@ -366,7 +370,7 @@ func NewDoHCallerV2(rawURL string, dialer proxy.Dialer) (*DoHCallerV2, error) {
 	}
 	caller := &DoHCallerV2{host: host, port: port, url: u.String(),
 		rwMux: sync.RWMutex{}, dialer: dialer}
-	caller.requireCh = make(chan interface{}, 1)
+	caller.requireCh = make(chan *dns.Msg, 1)
 	caller.satisfyCh = make(chan interface{}, 1)
 	caller.cancelCh = make(chan interface{}, 1)
 	go caller.run(time.Tick(time.Hour*24), time.Second)

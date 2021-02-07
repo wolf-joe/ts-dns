@@ -209,12 +209,12 @@ func TestDoHCallerV2(t *testing.T) {
 		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
 		Question: []dns.Question{{Name: "BAIDU.COM.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
 	}
+
+	// 测试解析超时的case
 	resolver := wrapperHandler(func(req *dns.Msg) *dns.Msg {
 		time.Sleep(time.Second * 3)
 		return nil
 	})
-
-	// 测试解析超时的case
 	caller, err = NewDoHCallerV2(url, nil)
 	assert.Nil(t, err)
 	caller.SetResolver(resolver)
@@ -222,11 +222,17 @@ func TestDoHCallerV2(t *testing.T) {
 	assert.NotNil(t, err) // timeout
 	caller.Exit()
 
-	resolver = wrapperHandler(func(req *dns.Msg) *dns.Msg {
-		return &dns.Msg{Answer: []dns.RR{
-			&dns.A{A: net.IPv4(223, 5, 5, 5)},
-		}}
-	})
+	// 测试回环解析
+	recReq := &dns.Msg{
+		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
+		Question: []dns.Question{{Name: "DNS.ALIDNS.COM.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
+	}
+	caller, err = NewDoHCallerV2(url, nil)
+	assert.Nil(t, err)
+	caller.SetResolver(resolver)
+	_, err = caller.Call(recReq)
+	assert.NotNil(t, err) // timeout
+	caller.Exit()
 
 	mocker := mock.Mocker{}
 	defer mocker.Reset()
@@ -250,6 +256,11 @@ func TestDoHCallerV2(t *testing.T) {
 	})
 
 	// 测试正常解析的case
+	resolver = wrapperHandler(func(req *dns.Msg) *dns.Msg {
+		return &dns.Msg{Answer: []dns.RR{
+			&dns.A{A: net.IPv4(223, 5, 5, 5)},
+		}}
+	})
 	caller, err = NewDoHCallerV2(url, nil)
 	assert.Nil(t, err)
 	caller.SetResolver(resolver)
@@ -280,4 +291,5 @@ func TestDoHCallerV2(t *testing.T) {
 	}
 	caller.Exit()
 	_ = caller.String()
+
 }

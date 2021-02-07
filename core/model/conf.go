@@ -111,7 +111,7 @@ func (conf *Group) GenCallers() (callers []outbound.Caller) {
 		}
 	}
 	for _, addr := range conf.DoH { // dns over https服务器
-		if caller, err := outbound.NewDoHCaller(addr, dialer); err != nil {
+		if caller, err := outbound.NewDoHCallerV2(addr, dialer); err != nil {
 			log.Errorf("parse doh server error: %v", err)
 		} else {
 			callers = append(callers, caller)
@@ -291,6 +291,13 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	if handler.Groups, err = config.GenGroups(); err != nil {
 		log.Errorf("read group config error: %v", err)
 		return nil, err
+	}
+	for _, group := range handler.Groups {
+		for _, caller := range group.Callers {
+			if doh, ok := caller.(*outbound.DoHCallerV2); ok {
+				doh.SetResolver(handler)
+			}
+		}
 	}
 	handler.HostsReaders = config.GenHostsReader()
 	handler.Cache = config.GenCache()

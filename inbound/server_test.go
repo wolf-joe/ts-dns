@@ -54,13 +54,6 @@ func TestHandler_Resolve(t *testing.T) {
 
 	mocker := mock.Mocker{}
 	defer mocker.Reset()
-	// 测试Resolve
-	mocker.MethodSeq(caller2, "Resolve", []gomonkey.Params{
-		{fmt.Errorf("err2")},
-	})
-	handler.ResolveDoH()
-	assert.Len(t, caller1.Servers, 1)
-	assert.Len(t, caller2.Servers, 0)
 }
 
 func TestHandler(t *testing.T) {
