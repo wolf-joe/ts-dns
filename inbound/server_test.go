@@ -60,8 +60,9 @@ func TestHandler(t *testing.T) {
 	// 初始化handler
 	handler := &Handler{Mux: new(sync.RWMutex), Cache: cache.NewDNSCache(0, 0, 0),
 		GFWMatcher: matcher.NewABPByText(""), CNIP: cache.NewRamSetByText(""),
-		HostsReaders: []hosts.Reader{hosts.NewReaderByText("")}, QueryLogger: log.New(),
+		HostsReaders: []hosts.Reader{hosts.NewReaderByText("")},
 	}
+	handler.QLogger = NewQueryLogger(log.New(), []string{"AAAA"}, false, false)
 	callers := []outbound.Caller{&outbound.DNSCaller{}}
 	group := &Group{Callers: callers, Matcher: matcher.NewABPByText(""), IPSet: &ipset.IPSet{}}
 	handler.Groups = map[string]*Group{"clean": group, "dirty": group}
@@ -187,4 +188,19 @@ func TestGroup(t *testing.T) {
 	})
 	group.AddIPSet(ctx, resp) // Add返回error
 	group.AddIPSet(ctx, resp) // Add正常返回
+}
+
+func TestQueryLogger(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	logger := NewQueryLogger(log.StandardLogger(), []string{"A"}, false, false)
+	assert.False(t, logger.ShouldIgnore(nil, false, false))
+
+	log.SetLevel(log.InfoLevel)
+	logger = NewQueryLogger(log.StandardLogger(), []string{"A"}, true, false)
+	assert.True(t, logger.ShouldIgnore(nil, true, false))
+
+	logger = NewQueryLogger(log.StandardLogger(), []string{"A"}, false, true)
+	assert.True(t, logger.ShouldIgnore(nil, false, true))
+	req := &dns.Msg{Question: []dns.Question{{Qtype: dns.TypeA}}}
+	assert.True(t, logger.ShouldIgnore(req, false, false))
 }

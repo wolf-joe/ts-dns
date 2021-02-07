@@ -1,6 +1,8 @@
 package inbound
 
 import (
+	"context"
+	"strings"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
@@ -8,7 +10,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
-	"github.com/wolf-joe/ts-dns/core/context"
+	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
 	"github.com/wolf-joe/ts-dns/outbound"
@@ -27,7 +29,7 @@ type Group struct {
 }
 
 // CallDNS 向组内的dns服务器转发请求，可能返回nil
-func (group *Group) CallDNS(ctx *context.Context, request *dns.Msg) *dns.Msg {
+func (group *Group) CallDNS(ctx context.Context, request *dns.Msg) *dns.Msg {
 	if len(group.Callers) == 0 || request == nil {
 		return nil
 	}
@@ -42,14 +44,14 @@ func (group *Group) CallDNS(ctx *context.Context, request *dns.Msg) *dns.Msg {
 	call := func(caller outbound.Caller, request *dns.Msg) *dns.Msg {
 		r, err := caller.Call(request)
 		if err != nil {
-			log.WithFields(ctx.Fields()).Errorf("query dns error: %v", err)
+			utils.CtxError(ctx, "query dns error: "+err.Error())
 		}
 		ch <- r
 		return r
 	}
 	// 遍历DNS服务器
 	for _, caller := range group.Callers {
-		log.WithFields(ctx.Fields()).Debugf("forward question %v to %v", request.Question, caller)
+		utils.CtxDebug(ctx, "forward question %v to %s", request.Question, caller)
 		if group.Concurrent || group.FastestV4 {
 			go call(caller, request)
 		} else if r := call(caller, request); r != nil {
@@ -70,16 +72,66 @@ func (group *Group) CallDNS(ctx *context.Context, request *dns.Msg) *dns.Msg {
 }
 
 // AddIPSet 将dns响应中所有的ipv4地址加入group指定的ipset
-func (group *Group) AddIPSet(ctx *context.Context, r *dns.Msg) {
+func (group *Group) AddIPSet(ctx context.Context, r *dns.Msg) {
 	if group.IPSet == nil || r == nil {
 		return
 	}
 	for _, a := range common.ExtractA(r) {
 		if err := group.IPSet.Add(a.A.String(), group.IPSet.Timeout); err != nil {
-			log.WithFields(ctx.Fields()).Errorf("add ipset error: %v", err)
+			utils.CtxError(ctx, "add ipset error: "+err.Error())
 		}
 	}
 	return
+}
+
+// QueryLogger 打印请求日志的配置
+type QueryLogger struct {
+	logger       *log.Logger
+	ignoreQTypes map[uint16]bool
+	ignoreHosts  bool
+	ignoreCache  bool
+}
+
+// ShouldIgnore 判断该次请求是否应该打印请求日志
+func (logger *QueryLogger) ShouldIgnore(request *dns.Msg, hitHosts, hitCache bool) bool {
+	if logger.logger.Level == log.DebugLevel {
+		return false
+	}
+	if hitHosts && logger.ignoreHosts || hitCache && logger.ignoreCache {
+		return true
+	}
+	for _, question := range request.Question {
+		if ignore, ok := logger.ignoreQTypes[question.Qtype]; ok && ignore {
+			return true
+		}
+	}
+	return false
+}
+
+// GetFields 从dns请求中获取用于打印日志的fields
+func (logger *QueryLogger) GetFields(writer dns.ResponseWriter, request *dns.Msg) log.Fields {
+	fields := log.Fields{"SRC": writer.RemoteAddr().String()}
+	for _, question := range request.Question {
+		fields["QUESTION"] = question.Name
+		fields["Q_TYPE"] = dns.Type(question.Qtype).String()
+		break
+	}
+	return fields
+}
+
+// NewQueryLogger 创建一个QueryLogger
+func NewQueryLogger(logger *log.Logger, ignoreQTypes []string,
+	ignoreHosts, ignoreCache bool) *QueryLogger {
+	queryLogger := &QueryLogger{
+		logger: logger, ignoreHosts: ignoreHosts, ignoreCache: ignoreCache,
+		ignoreQTypes: make(map[uint16]bool, len(ignoreQTypes)),
+	}
+	for _, qType := range ignoreQTypes {
+		if t, ok := dns.StringToType[strings.ToUpper(qType)]; ok {
+			queryLogger.ignoreQTypes[t] = true
+		}
+	}
+	return queryLogger
 }
 
 // Handler 存储主要配置的dns请求处理器，程序核心
@@ -93,12 +145,12 @@ type Handler struct {
 	CNIP          *cache.RamSet
 	HostsReaders  []hosts.Reader
 	Groups        map[string]*Group
-	QueryLogger   *log.Logger
+	QLogger       *QueryLogger
 	DisableQTypes map[string]bool
 }
 
 // HitHosts 如dns请求匹配hosts，则生成对应dns记录并返回。否则返回nil
-func (handler *Handler) HitHosts(ctx *context.Context, request *dns.Msg) *dns.Msg {
+func (handler *Handler) HitHosts(ctx context.Context, request *dns.Msg) *dns.Msg {
 	question := request.Question[0]
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
@@ -110,7 +162,7 @@ func (handler *Handler) HitHosts(ctx *context.Context, request *dns.Msg) *dns.Ms
 			}
 			if record != "" {
 				if ret, err := dns.NewRR(record); err != nil {
-					log.WithFields(ctx.Fields()).Errorf("make DNS.RR error: %v", err)
+					utils.CtxError(ctx, "make DNS.RR error: "+err.Error())
 				} else {
 					r := new(dns.Msg)
 					r.Answer = append(r.Answer, ret)
@@ -122,19 +174,11 @@ func (handler *Handler) HitHosts(ctx *context.Context, request *dns.Msg) *dns.Ms
 	return nil
 }
 
-// LogQuery 记录请求日志
-func (handler *Handler) LogQuery(fields log.Fields, msg, group string) {
-	entry := handler.QueryLogger.WithFields(fields)
-	if group != "" {
-		entry = entry.WithField("GROUP", group)
-	}
-	entry.Info(msg)
-}
-
 // ServeDNS 处理dns请求，程序核心函数
-func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
+func (handler *Handler) ServeDNS(writer dns.ResponseWriter, request *dns.Msg) {
 	handler.Mux.RLock() // 申请读锁，持续整个请求
-	ctx := context.NewContext(resp, request)
+	ctx := utils.NewCtx(handler.QLogger.logger, request.Id)
+	ctx = utils.WithFields(ctx, handler.QLogger.GetFields(writer, request))
 	var r *dns.Msg
 	var group *Group
 	defer func() {
@@ -142,18 +186,17 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 			r = &dns.Msg{}
 		}
 		r.SetReply(request) // 写入响应
-		log.WithFields(ctx.Fields()).Debugf("response: %q", r.Answer)
-		_ = resp.WriteMsg(r)
+		utils.CtxDebug(ctx, "response: %q", r.Answer)
+		_ = writer.WriteMsg(r)
 		if group != nil {
 			group.AddIPSet(ctx, r) // 写入IPSet
 		}
 		handler.Mux.RUnlock() // 读锁解除
-		_ = resp.Close()      // 结束连接
+		_ = writer.Close()    // 结束连接
 	}()
 
 	question := request.Question[0]
-	log.WithFields(ctx.Fields()).
-		Debugf("question: %q, extract: %q", request.Question, request.Extra)
+	utils.CtxDebug(ctx, "question: %q, extra: %q", request.Question, request.Extra)
 	if handler.DisableIPv6 && question.Qtype == dns.TypeAAAA {
 		r = &dns.Msg{}
 		return // 禁用IPv6时直接返回
@@ -164,12 +207,16 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	}
 	// 检测是否命中hosts
 	if r = handler.HitHosts(ctx, request); r != nil {
-		handler.LogQuery(ctx.Fields(), "hit hosts", "")
+		if !handler.QLogger.ShouldIgnore(request, true, false) {
+			utils.CtxInfo(ctx, "hit hosts")
+		}
 		return
 	}
 	// 检测是否命中dns缓存
 	if r = handler.Cache.Get(request); r != nil {
-		handler.LogQuery(ctx.Fields(), "hit cache", "")
+		if !handler.QLogger.ShouldIgnore(request, false, true) {
+			utils.CtxInfo(ctx, "hit cache")
+		}
 		return
 	}
 
@@ -177,7 +224,7 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	var name string
 	for name, group = range handler.Groups {
 		if match, ok := group.Matcher.Match(question.Name); ok && match {
-			handler.LogQuery(ctx.Fields(), "match by rules", name)
+			utils.CtxInfo(ctx, "match by rules, group: "+name)
 			r = group.CallDNS(ctx, request)
 			// 设置dns缓存
 			handler.Cache.Set(request, r)
@@ -189,13 +236,13 @@ func (handler *Handler) ServeDNS(resp dns.ResponseWriter, request *dns.Msg) {
 	r = group.CallDNS(ctx, request)
 	if allInRange(r, handler.CNIP) {
 		// 未出现非cn ip，流程结束
-		handler.LogQuery(ctx.Fields(), "cn/empty ipv4", "clean")
+		utils.CtxInfo(ctx, "cn/empty ipv4, group: clean")
 	} else if blocked, ok := handler.GFWMatcher.Match(question.Name); !ok || !blocked {
 		// 出现非cn ip但域名不匹配gfwlist，流程结束
-		handler.LogQuery(ctx.Fields(), "not match gfwlist", "clean")
+		utils.CtxInfo(ctx, "not match gfwlist, group: clean")
 	} else {
 		// 出现非cn ip且域名匹配gfwlist，用dirty组dns再次解析
-		handler.LogQuery(ctx.Fields(), "match gfwlist", "dirty")
+		utils.CtxInfo(ctx, "match gfwlist, group: dirty")
 		group = handler.Groups["dirty"] // 设置group变量以在defer里添加ipset
 		r = group.CallDNS(ctx, request)
 	}
@@ -228,8 +275,8 @@ func (handler *Handler) Refresh(target *Handler) {
 		}
 		handler.Groups = target.Groups
 	}
-	if target.QueryLogger != nil {
-		handler.QueryLogger = target.QueryLogger
+	if target.QLogger != nil {
+		handler.QLogger = target.QLogger
 	}
 	handler.DisableIPv6 = target.DisableIPv6
 }

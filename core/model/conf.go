@@ -10,11 +10,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
-	bizCtx "github.com/wolf-joe/ts-dns/core/context"
 	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
@@ -22,31 +21,6 @@ import (
 	"github.com/wolf-joe/ts-dns/outbound"
 	"golang.org/x/net/proxy"
 )
-
-// 自定义查询日志的输出格式
-type queryFormatter struct {
-	log.TextFormatter
-	ignoreQTypes []string
-	ignoreHosts  bool
-	ignoreCache  bool
-}
-
-// 和inbound/server.go中Handler.LogQuery的行为强关联
-func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
-	var ignore []byte
-	for _, qType := range f.ignoreQTypes {
-		if entry.Data[bizCtx.QTypeKey] == qType {
-			return ignore, nil
-		}
-	}
-	if f.ignoreHosts && entry.Message == "hit hosts" {
-		return ignore, nil
-	}
-	if f.ignoreCache && entry.Message == "hit cache" {
-		return ignore, nil
-	}
-	return f.TextFormatter.Format(entry)
-}
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
@@ -138,8 +112,9 @@ type QueryLog struct {
 }
 
 // GenLogger 读取logger配置并打包成Logger对象
-func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
-	logger = log.New()
+func (conf *QueryLog) GenLogger() (*inbound.QueryLogger, error) {
+	logger := logrus.New()
+	logger.SetLevel(logrus.StandardLogger().Level)
 	if conf.File == "/dev/null" {
 		logger.SetOutput(ioutil.Discard)
 	} else if conf.File != "" {
@@ -149,9 +124,7 @@ func (conf *QueryLog) GenLogger() (logger *log.Logger, err error) {
 		}
 		logger.SetOutput(file)
 	}
-	logger.SetFormatter(&queryFormatter{ignoreQTypes: conf.IgnoreQTypes,
-		ignoreHosts: conf.IgnoreHosts, ignoreCache: conf.IgnoreCache})
-	return logger, nil
+	return inbound.NewQueryLogger(logger, conf.IgnoreQTypes, conf.IgnoreHosts, conf.IgnoreCache), nil
 }
 
 // Conf 配置文件总体结构
@@ -306,7 +279,7 @@ func NewHandler(ctx context.Context, filename string) (handler *inbound.Handler,
 	handler.HostsReaders = config.GenHostsReader(ctx)
 	handler.Cache = config.GenCache()
 	// 读取Logger
-	if handler.QueryLogger, err = config.Logger.GenLogger(); err != nil {
+	if handler.QLogger, err = config.Logger.GenLogger(); err != nil {
 		utils.CtxError(ctx, "create query logger error: "+err.Error())
 		return nil, err
 	}

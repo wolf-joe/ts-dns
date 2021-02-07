@@ -1,19 +1,16 @@
 package model
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	log "github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	bizCtx "github.com/wolf-joe/ts-dns/core/context"
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
@@ -186,29 +183,4 @@ func TestNewHandler(t *testing.T) {
 	handler, err = NewHandler(ctx, "") // 验证配置成功
 	assert.NotNil(t, handler)
 	assert.Nil(t, err)
-}
-
-func TestQueryFormatter(t *testing.T) {
-	var buffer bytes.Buffer
-	logger := log.New()
-	logger.SetOutput(&buffer)
-	logger.SetFormatter(&queryFormatter{
-		ignoreQTypes: []string{"A", "NS"}, ignoreHosts: true, ignoreCache: true,
-	})
-	// 测试ignoreQTypes
-	fields := log.Fields{bizCtx.QuestionKey: "ip.cn.", bizCtx.QTypeKey: "A"}
-	logger.WithFields(fields).Info("msg")
-	fields[bizCtx.QTypeKey] = "NS"
-	logger.WithFields(fields).Info("msg")
-	assert.Empty(t, buffer.String())
-	fields[bizCtx.QTypeKey] = "PTR"
-	logger.WithFields(fields).Info("msg")
-	assert.NotEmpty(t, buffer.String())
-	// 测试ignoreHosts
-	buffer.Reset()
-	logger.WithFields(fields).Info("hit hosts")
-	assert.Empty(t, buffer.String())
-	// 测试ignoreCache
-	logger.WithFields(fields).Info("hit cache")
-	assert.Empty(t, buffer.String())
 }
