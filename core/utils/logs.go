@@ -12,6 +12,7 @@ import (
 const (
 	loggerKey = "TS_LOGGER"
 	logIDKey  = "TS_LOG_ID"
+	fieldsKey = "TS_LOG_FIELDS"
 )
 
 func ctxLog(level logrus.Level, ctx context.Context, format string, args ...interface{}) {
@@ -25,13 +26,19 @@ func ctxLog(level logrus.Level, ctx context.Context, format string, args ...inte
 	if val, ok := ctx.Value(logIDKey).(uint16); ok {
 		logID = val
 	}
+	var entry *logrus.Entry // 从context内读取fields
+	if val, ok := ctx.Value(fieldsKey).(logrus.Fields); ok {
+		entry = logger.WithFields(val)
+	} else {
+		entry = logrus.NewEntry(logger)
+	}
 	location := "???.go:0" // 获取调用方位置
 	if _, file, line, ok := runtime.Caller(2); ok {
 		location = fmt.Sprintf("%s:%d", filepath.Base(file), line)
 	}
 	// 统一输出格式
 	format = fmt.Sprintf("[0x%04x] [%s] %s", logID, location, format)
-	logger.Logf(level, format, args...)
+	entry.Logf(level, format, args...)
 }
 
 // CtxDebug logger.Debugf的封装，logger从context中获取

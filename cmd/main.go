@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/core/model"
+	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/inbound"
 )
 
@@ -18,6 +20,7 @@ import (
 var VERSION = "dev"
 
 func main() {
+	ctx := utils.NewCtx(nil, 0xffff)
 	// 读取命令行参数
 	filename := flag.String("c", "ts-dns.toml", "config file path")
 	reload := flag.Bool("r", false, "auto reload config file")
@@ -30,7 +33,6 @@ func main() {
 	}
 	if *debugMode {
 		log.SetLevel(log.DebugLevel)
-		log.Debug("show debug log")
 	}
 	// 读取配置文件
 	handler, err := model.NewHandler(*filename)
@@ -38,17 +40,17 @@ func main() {
 		os.Exit(1)
 	}
 	if *reload { // 自动重载配置文件
-		log.Warnf("auto reload " + *filename)
-		go autoReload(handler, *filename)
+		utils.CtxWarn(ctx, "auto reload "+*filename)
+		go autoReload(ctx, handler, *filename)
 	}
 	// 启动dns服务，因为可能会同时监听TCP/UDP，所以封装个函数
 	wg := sync.WaitGroup{}
 	runSrv := func(net string) {
 		defer wg.Done()
 		srv := &dns.Server{Addr: handler.Listen, Net: net, Handler: handler}
-		log.Warnf("listen on %s/%s", handler.Listen, net)
+		utils.CtxWarn(ctx, "listen on %s/%s", handler.Listen, net)
 		if err := srv.ListenAndServe(); err != nil {
-			log.Errorf("%v", err)
+			utils.CtxError(ctx, err.Error())
 		}
 	}
 	// 判断是否在配置文件里指定了监听协议
@@ -61,25 +63,25 @@ func main() {
 		go runSrv("tcp")
 	}
 	wg.Wait()
-	log.Info("ts-dns exited.")
+	utils.CtxInfo(ctx, "ts-dns exited.")
 }
 
 // 持续监测目标配置文件，如文件发生变动则尝试载入，载入成功后更新现有handler的配置
-func autoReload(handle *inbound.Handler, filename string) {
-	fields := log.Fields{"file": filename}
+func autoReload(ctx context.Context, handle *inbound.Handler, filename string) {
+	ctx = utils.WithFields(ctx, log.Fields{"file": filename})
 	// 创建监测器
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.WithFields(fields).Errorf("create watcher error: %v", err)
+		utils.CtxError(ctx, "create watcher error: "+err.Error())
 		return
 	}
 	defer func() {
 		_ = watcher.Close()
-		log.WithFields(fields).Errorf("file watcher closed")
+		utils.CtxError(ctx, "file watcher closed")
 	}()
 	// 指定监测文件
 	if err = watcher.Add(filename); err != nil {
-		log.WithFields(fields).Errorf("watch file error: %v", err)
+		utils.CtxError(ctx, "watch file error: "+err.Error())
 		return
 	}
 	// 接收文件事件
@@ -90,7 +92,7 @@ func autoReload(handle *inbound.Handler, filename string) {
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
-				log.WithFields(fields).Warnf("file changed, reloading")
+				utils.CtxWarn(ctx, "file changed, reloading")
 				if newHandler, err := model.NewHandler(filename); err == nil {
 					handle.Refresh(newHandler)
 				}
@@ -99,7 +101,7 @@ func autoReload(handle *inbound.Handler, filename string) {
 			if !ok {
 				return
 			}
-			log.WithFields(fields).Errorf("watch error: %v", err)
+			utils.CtxError(ctx, "watch error: "+err.Error())
 		}
 		time.Sleep(time.Second)
 	}
