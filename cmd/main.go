@@ -35,7 +35,7 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 	// 读取配置文件
-	handler, err := model.NewHandler(*filename)
+	handler, err := model.NewHandler(ctx, *filename)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -93,7 +93,7 @@ func autoReload(ctx context.Context, handle *inbound.Handler, filename string) {
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write { // 文件变动事件
 				utils.CtxWarn(ctx, "file changed, reloading")
-				if newHandler, err := model.NewHandler(filename); err == nil {
+				if newHandler, err := model.NewHandler(ctx, filename); err == nil {
 					handle.Refresh(newHandler)
 				}
 			}

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,7 +14,8 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
-	"github.com/wolf-joe/ts-dns/core/context"
+	bizCtx "github.com/wolf-joe/ts-dns/core/context"
+	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
 	"github.com/wolf-joe/ts-dns/matcher"
@@ -33,7 +35,7 @@ type queryFormatter struct {
 func (f *queryFormatter) Format(entry *log.Entry) ([]byte, error) {
 	var ignore []byte
 	for _, qType := range f.ignoreQTypes {
-		if entry.Data[context.QTypeKey] == qType {
+		if entry.Data[bizCtx.QTypeKey] == qType {
 			return ignore, nil
 		}
 	}
@@ -77,7 +79,7 @@ func (conf *Group) GenIPSet() (ipSet *ipset.IPSet, err error) {
 }
 
 // GenCallers 读取dns配置并打包成Caller对象
-func (conf *Group) GenCallers() (callers []outbound.Caller) {
+func (conf *Group) GenCallers(ctx context.Context) (callers []outbound.Caller) {
 	// 读取socks5代理地址
 	var dialer proxy.Dialer
 	if conf.Socks5 != "" {
@@ -111,8 +113,8 @@ func (conf *Group) GenCallers() (callers []outbound.Caller) {
 		}
 	}
 	for _, addr := range conf.DoH { // dns over https服务器
-		if caller, err := outbound.NewDoHCallerV2(addr, dialer); err != nil {
-			log.Errorf("parse doh server error: %v", err)
+		if caller, err := outbound.NewDoHCallerV2(ctx, addr, dialer); err != nil {
+			utils.CtxError(ctx, "parse doh server error: "+err.Error())
 		} else {
 			callers = append(callers, caller)
 		}
@@ -197,7 +199,7 @@ func (conf *Conf) GenCache() *cache.DNSCache {
 }
 
 // GenHostsReader 读取hosts section里的hosts记录、hosts_files里的hosts文件路径，生成hosts实例列表
-func (conf *Conf) GenHostsReader() (readers []hosts.Reader) {
+func (conf *Conf) GenHostsReader(ctx context.Context) (readers []hosts.Reader) {
 	// 读取Hosts列表
 	var lines []string
 	for hostname, ip := range conf.Hosts {
@@ -210,7 +212,7 @@ func (conf *Conf) GenHostsReader() (readers []hosts.Reader) {
 	// 读取Hosts文件列表。reloadTick为0代表不自动重载hosts文件
 	for _, filename := range conf.HostsFiles {
 		if reader, err := hosts.NewReaderByFile(filename, 0); err != nil {
-			log.WithField("file", filename).Warnf("read hosts error: %v", err)
+			utils.CtxWarn(ctx, "read hosts file %s error: %s", filename, err)
 		} else {
 			readers = append(readers, reader)
 		}
@@ -219,25 +221,27 @@ func (conf *Conf) GenHostsReader() (readers []hosts.Reader) {
 }
 
 // GenGroups 读取groups section里的配置，生成inbound.Group map
-func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
+func (conf *Conf) GenGroups(ctx context.Context) (groups map[string]*inbound.Group, err error) {
 	groups = map[string]*inbound.Group{}
 	// 读取每个域名组的配置信息
 	for name, group := range conf.Groups {
 		inboundGroup := &inbound.Group{
-			Callers: group.GenCallers(), Concurrent: group.Concurrent,
+			Callers: group.GenCallers(ctx), Concurrent: group.Concurrent,
 			FastestV4: group.FastestV4, TCPPingPort: group.TCPPingPort,
 			NoCookie: group.NoCookie,
 		}
 		if inboundGroup.Concurrent {
-			log.Warnln("enable concurrent dns in group " + name)
+			utils.CtxWarn(ctx, "enable concurrent for group "+name)
 		}
 		if inboundGroup.FastestV4 {
-			log.Warnln("find fastest ipv4 in group " + name)
+			utils.CtxWarn(ctx, "find fastest ipv4 for group "+name)
 		}
 		if inboundGroup.ECS, err = common.ParseECS(group.ECS); err != nil {
 			return nil, err
 		}
-		log.Debugf("ecs conf: %v", inboundGroup.ECS)
+		if group.ECS != "" {
+			utils.CtxWarn(ctx, "enable ecs %s for group %s", group.ECS, name)
+		}
 		// 读取匹配规则
 		inboundGroup.Matcher, err = matcher.NewABPByFile(group.RulesFile, false)
 		if err != nil {
@@ -254,10 +258,10 @@ func (conf *Conf) GenGroups() (groups map[string]*inbound.Group, err error) {
 }
 
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
-func NewHandler(filename string) (handler *inbound.Handler, err error) {
+func NewHandler(ctx context.Context, filename string) (handler *inbound.Handler, err error) {
 	config := Conf{Cache: &Cache{}, Logger: &QueryLog{}, GFWb64: true}
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
-		log.WithField("file", filename).Errorf("read config error: %v", err)
+		utils.CtxError(ctx, "read config %s error: %s", filename, err)
 		return nil, err
 	}
 	config.SetDefault()
@@ -269,7 +273,7 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	handler.DisableIPv6 = config.DisableIPv6
 	if handler.DisableIPv6 {
-		log.Warn("disable ipv6 resolve")
+		utils.CtxWarn(ctx, "disable ipv6 resolve")
 	}
 	handler.DisableQTypes = map[string]bool{}
 	for _, qType := range config.DisableQTypes {
@@ -279,17 +283,17 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 	}
 	// 读取gfwlist
 	if handler.GFWMatcher, err = matcher.NewABPByFile(config.GFWList, config.GFWb64); err != nil {
-		log.WithField("file", config.GFWList).Errorf("read gfwlist error: %v", err)
+		utils.CtxError(ctx, "read gfwlist %s error: %s", config.GFWList, err)
 		return nil, err
 	}
 	// 读取cnip
 	if handler.CNIP, err = cache.NewRamSetByFile(config.CNIP); err != nil {
-		log.WithField("file", config.CNIP).Errorf("read cnip error: %v", err)
+		utils.CtxError(ctx, "read cnip %s error: %s", config.CNIP, err)
 		return nil, err
 	}
 	// 读取groups
-	if handler.Groups, err = config.GenGroups(); err != nil {
-		log.Errorf("read group config error: %v", err)
+	if handler.Groups, err = config.GenGroups(ctx); err != nil {
+		utils.CtxError(ctx, "read group config error: "+err.Error())
 		return nil, err
 	}
 	for _, group := range handler.Groups {
@@ -299,11 +303,11 @@ func NewHandler(filename string) (handler *inbound.Handler, err error) {
 			}
 		}
 	}
-	handler.HostsReaders = config.GenHostsReader()
+	handler.HostsReaders = config.GenHostsReader(ctx)
 	handler.Cache = config.GenCache()
 	// 读取Logger
 	if handler.QueryLogger, err = config.Logger.GenLogger(); err != nil {
-		log.Errorf("create query logger error: %v", err)
+		utils.CtxError(ctx, "create query logger error: "+err.Error())
 		return nil, err
 	}
 	// 检测配置有效性

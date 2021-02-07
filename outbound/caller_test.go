@@ -14,6 +14,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
+	"github.com/wolf-joe/ts-dns/core/utils"
 	"golang.org/x/net/proxy"
 )
 
@@ -85,90 +86,6 @@ func TestDNSCaller(t *testing.T) {
 	_ = caller.String()
 }
 
-func TestDoHCaller(t *testing.T) {
-	mocker := mock.Mocker{}
-	defer mocker.Reset()
-
-	req := &dns.Msg{}
-	httpReq := &http.Request{Header: map[string][]string{}}
-
-	// 测试NewDoHCaller
-	_, err := NewDoHCaller("%%%%", dialer) // url解析失败
-	assert.NotNil(t, err)
-	_, err = NewDoHCaller("", dialer) // url解析失败
-	assert.NotNil(t, err)
-	_, err = NewDoHCaller("https://:::/", dialer) // url解析失败
-	assert.NotNil(t, err)
-	caller, err := NewDoHCaller("https://host/path", nil) // url解析成功
-	assert.Nil(t, err)
-	assert.NotNil(t, caller)
-	assert.Equal(t, caller.Host, "host")
-	assert.Equal(t, caller.port, "443")
-	caller, err = NewDoHCaller("https://host:80/path", dialer) // url解析成功
-	assert.Nil(t, err)
-	assert.NotNil(t, caller)
-	assert.Equal(t, caller.port, "80")
-	// 测试.Resolve
-	mocker.FuncSeq(net.LookupIP, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {[]net.IP{nil}, nil}, {[]net.IP{{1, 1, 1, 1}}, nil},
-	})
-	err = caller.Resolve() // LookupIP返回异常
-	assert.NotNil(t, err)
-	err = caller.Resolve() // LookupIP返回IP列表异常
-	assert.NotNil(t, err)
-	err = caller.Resolve() // LookupIP返回1.1.1.1
-	assert.Nil(t, err)
-	assert.Equal(t, caller.Servers[0], "1.1.1.1")
-	// 测试DialContext
-	_, _ = caller.client.Transport.(*http.Transport).DialContext(nil, "", "")
-
-	// 测试.Call
-	caller.Servers = []string{}
-	_, err = caller.Call(req) // Servers为空则返回异常
-	assert.NotNil(t, err)
-
-	caller.Servers = []string{"1.1.1.1"}
-	mocker.MethodSeq(req, "PackBuffer", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {[]byte{1}, nil}, {[]byte{1}, nil},
-		{[]byte{1}, nil}, {[]byte{1}, nil}, {[]byte{1}, nil},
-	})
-	mocker.FuncSeq(http.NewRequest, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {httpReq, nil}, {httpReq, nil},
-		{httpReq, nil}, {httpReq, nil},
-	})
-	mocker.MethodSeq(caller.client, "Do", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {&http.Response{Body: &net.TCPConn{}}, nil},
-		{&http.Response{Body: &net.TCPConn{}}, nil},
-		{&http.Response{Body: &net.TCPConn{}}, nil},
-	})
-	mocker.FuncSeq(ioutil.ReadAll, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {make([]byte, 1), nil},
-		{make([]byte, 12), nil},
-	})
-
-	// Pack失败
-	r, err := caller.Call(req)
-	assertFail(t, r, err)
-	// Pack成功，但NewRequest失败
-	r, err = caller.Call(req)
-	assertFail(t, r, err)
-	// Pack、NewRequest成功，但Do失败
-	r, err = caller.Call(req)
-	assertFail(t, r, err)
-	// Pack、NewRequest、Do成功，但ReadAll失败
-	r, err = caller.Call(req)
-	assertFail(t, r, err)
-	// Pack、NewRequest、Do、ReadAll成功，但Unpack失败
-	r, err = caller.Call(req)
-	assertFail(t, r, err)
-	// Pack、NewRequest、Do、ReadAll、Unpack成功
-	r, err = caller.Call(req)
-	assertSuccess(t, r, err)
-
-	caller.Exit()
-	_ = caller.String()
-}
-
 func wrapperHandler(serveDNS func(req *dns.Msg) *dns.Msg) dns.HandlerFunc {
 	handlerFunc := func(writer dns.ResponseWriter, req *dns.Msg) {
 		defer func() { _ = writer.Close() }()
@@ -183,19 +100,20 @@ func wrapperHandler(serveDNS func(req *dns.Msg) *dns.Msg) dns.HandlerFunc {
 
 func TestDoHCallerV2(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
+	ctx := utils.NewCtx(nil, 0xffff)
 
 	// 测试解析url失败的case
-	caller, err := NewDoHCallerV2("\n", nil)
+	caller, err := NewDoHCallerV2(ctx, "\n", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("abc", nil)
+	caller, err = NewDoHCallerV2(ctx, "abc", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("https://abc::/", nil)
+	caller, err = NewDoHCallerV2(ctx, "https://abc::/", nil)
 	assert.NotNil(t, err)
 
 	url := "https://dns.alidns.com/dns-query"
 
 	// 测试run和stop
-	caller, err = NewDoHCallerV2(url, nil)
+	caller, err = NewDoHCallerV2(ctx, url, nil)
 	assert.Nil(t, err)
 	caller.Exit()
 	time.Sleep(time.Millisecond * 100) // wait exit
@@ -215,7 +133,7 @@ func TestDoHCallerV2(t *testing.T) {
 		time.Sleep(time.Second * 3)
 		return nil
 	})
-	caller, err = NewDoHCallerV2(url, nil)
+	caller, err = NewDoHCallerV2(ctx, url, nil)
 	assert.Nil(t, err)
 	caller.SetResolver(resolver)
 	_, err = caller.Call(req)
@@ -227,7 +145,7 @@ func TestDoHCallerV2(t *testing.T) {
 		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
 		Question: []dns.Question{{Name: "DNS.ALIDNS.COM.", Qtype: dns.TypeA, Qclass: dns.ClassINET}},
 	}
-	caller, err = NewDoHCallerV2(url, nil)
+	caller, err = NewDoHCallerV2(ctx, url, nil)
 	assert.Nil(t, err)
 	caller.SetResolver(resolver)
 	_, err = caller.Call(recReq)
@@ -261,7 +179,7 @@ func TestDoHCallerV2(t *testing.T) {
 			&dns.A{A: net.IPv4(223, 5, 5, 5)},
 		}}
 	})
-	caller, err = NewDoHCallerV2(url, nil)
+	caller, err = NewDoHCallerV2(ctx, url, nil)
 	assert.Nil(t, err)
 	caller.SetResolver(resolver)
 	// Pack失败

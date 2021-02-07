@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -12,10 +13,12 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	"github.com/wolf-joe/ts-dns/core/context"
+	bizCtx "github.com/wolf-joe/ts-dns/core/context"
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
+	"github.com/wolf-joe/ts-dns/inbound"
 	"github.com/wolf-joe/ts-dns/matcher"
+	"github.com/wolf-joe/ts-dns/outbound"
 )
 
 func TestQueryLog(t *testing.T) {
@@ -61,13 +64,13 @@ func TestGroup(t *testing.T) {
 	assert.Nil(t, err)
 
 	// 测试GenCallers
-	callers := group.GenCallers()
+	callers := group.GenCallers(context.Background())
 	assert.Empty(t, callers)
 	group.Socks5 = "1.1.1.1"
 	group.DNS = []string{"1.1.1.1", "8.8.8.8:53/tcp"}              // 两个都有效
 	group.DoT = []string{"1.1.1.1", "1.1.1.1@name"}                // 后一个有效
 	group.DoH = []string{"not exists", "https://domain/dns-query"} // 后一个有效
-	callers = group.GenCallers()
+	callers = group.GenCallers(context.Background())
 	assert.Equal(t, len(callers), 4)
 
 }
@@ -92,7 +95,8 @@ func TestConf(t *testing.T) {
 	mocker.FuncSeq(hosts.NewReaderByFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {&hosts.FileReader{}, nil},
 	})
-	readers := conf.GenHostsReader()
+	ctx := context.Background()
+	readers := conf.GenHostsReader(ctx)
 	assert.Equal(t, len(readers), 2)
 	assert.NotNil(t, readers[0].IP("host", false))
 	// 测试GenGroups
@@ -104,19 +108,19 @@ func TestConf(t *testing.T) {
 		{nil, fmt.Errorf("err")}, {nil, nil},
 	})
 	conf.Groups["test"].ECS = "1.1.1."
-	groups, err := conf.GenGroups() // genECS失败
+	groups, err := conf.GenGroups(ctx) // genECS失败
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
 	conf.Groups["test"].ECS = "1.1.1.1"
 	conf.Groups["test"].RulesFile = "???not_exists" // NewABPByFile失败
-	groups, err = conf.GenGroups()
+	groups, err = conf.GenGroups(ctx)
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
 	conf.Groups["test"].RulesFile = "" // NewABPByFile成功
-	groups, err = conf.GenGroups()     // GenIPSet失败
+	groups, err = conf.GenGroups(ctx)  // GenIPSet失败
 	assert.NotNil(t, err)
 	assert.Nil(t, groups)
-	groups, err = conf.GenGroups() // GenIPSet成功
+	groups, err = conf.GenGroups(ctx) // GenIPSet成功
 	assert.Nil(t, err)
 	assert.NotNil(t, groups)
 }
@@ -128,7 +132,8 @@ func TestNewHandler(t *testing.T) {
 	mocker.FuncSeq(toml.DecodeFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")},
 	})
-	handler, err := NewHandler("") // DecodeFile失败
+	ctx := context.Background()
+	handler, err := NewHandler(ctx, "") // DecodeFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 
@@ -145,34 +150,40 @@ func TestNewHandler(t *testing.T) {
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
 		{nil, nil}, {nil, nil},
 	})
-	handler, err = NewHandler("") // NewABPByFile失败
+	handler, err = NewHandler(ctx, "") // NewABPByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.FuncSeq(cache.NewRamSetByFile, []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
 		{nil, nil},
 	})
-	handler, err = NewHandler("") // NewRamSetByFile失败
+	handler, err = NewHandler(ctx, "") // NewRamSetByFile失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
+
+	caller, _ := outbound.NewDoHCallerV2(ctx, "https://abc/", nil)
+	caller.Exit()
+	groups := map[string]*inbound.Group{"abc": {
+		Callers: []outbound.Caller{caller},
+	}}
 	mocker.MethodSeq(&Conf{}, "GenGroups", []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil}, {nil, nil},
+		{nil, fmt.Errorf("err")}, {groups, nil}, {nil, nil}, {nil, nil},
 	})
-	handler, err = NewHandler("") // GenGroups失败
+	handler, err = NewHandler(ctx, "") // GenGroups失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.MethodSeq(&QueryLog{}, "GenLogger", []gomonkey.Params{
 		{nil, fmt.Errorf("err")}, {nil, nil}, {nil, nil},
 	})
-	handler, err = NewHandler("") // GenLogger失败
+	handler, err = NewHandler(ctx, "") // GenLogger失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
 	mocker.MethodSeq(&Conf{}, "GenCache", []gomonkey.Params{{nil}, {nil}})
 	mocker.MethodSeq(handler, "IsValid", []gomonkey.Params{{false}, {true}})
-	handler, err = NewHandler("") // 验证配置失败
+	handler, err = NewHandler(ctx, "") // 验证配置失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
-	handler, err = NewHandler("") // 验证配置成功
+	handler, err = NewHandler(ctx, "") // 验证配置成功
 	assert.NotNil(t, handler)
 	assert.Nil(t, err)
 }
@@ -185,12 +196,12 @@ func TestQueryFormatter(t *testing.T) {
 		ignoreQTypes: []string{"A", "NS"}, ignoreHosts: true, ignoreCache: true,
 	})
 	// 测试ignoreQTypes
-	fields := log.Fields{context.QuestionKey: "ip.cn.", context.QTypeKey: "A"}
+	fields := log.Fields{bizCtx.QuestionKey: "ip.cn.", bizCtx.QTypeKey: "A"}
 	logger.WithFields(fields).Info("msg")
-	fields[context.QTypeKey] = "NS"
+	fields[bizCtx.QTypeKey] = "NS"
 	logger.WithFields(fields).Info("msg")
 	assert.Empty(t, buffer.String())
-	fields[context.QTypeKey] = "PTR"
+	fields[bizCtx.QTypeKey] = "PTR"
 	logger.WithFields(fields).Info("msg")
 	assert.NotEmpty(t, buffer.String())
 	// 测试ignoreHosts
