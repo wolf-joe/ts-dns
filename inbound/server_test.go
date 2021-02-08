@@ -13,7 +13,6 @@ import (
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	bizCtx "github.com/wolf-joe/ts-dns/core/context"
 	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/matcher"
@@ -93,7 +92,7 @@ func TestHandler(t *testing.T) {
 	mocker.MethodSeq(handler.HostsReaders[0], "Record", []gomonkey.Params{
 		{""}, {""}, {"ip.cn 0 IN A ???"}, {"ip.cn 0 IN A 1.1.1.1"},
 	})
-	ctx := bizCtx.NewEmptyContext(0)
+	ctx := context.Background()
 	assert.Nil(t, handler.HitHosts(ctx, req))    // Record返回空串（需要两个返回值）
 	assert.Nil(t, handler.HitHosts(ctx, req))    // Record返回值格式不正确
 	assert.NotNil(t, handler.HitHosts(ctx, req)) // Record返回值正常
@@ -170,7 +169,7 @@ func TestGroup(t *testing.T) {
 		{nil, fmt.Errorf("err")}, {resp, nil},
 		{nil, fmt.Errorf("err")}, {resp, nil},
 	})
-	ctx := bizCtx.NewEmptyContext(0)
+	ctx := context.Background()
 	assert.Nil(t, group.CallDNS(ctx, &dns.Msg{}))    // Call返回error
 	assert.NotNil(t, group.CallDNS(ctx, &dns.Msg{})) // Call正常返回
 	// 测试并发CallDNS。两个Caller的并发在单测（-race）时会和mock冲突，这里就不测了

@@ -17,7 +17,7 @@ func TestTools(t *testing.T) {
 	assert.False(t, allInRange(resp, cache.NewRamSetByText("")))
 	assert.True(t, allInRange(resp, cache.NewRamSetByText("1.1.1.1")))
 
-	assert.True(t, pingRtt("", -1) > maxRtt)
+	assert.True(t, pingRtt("299.299.299.299", -1) > maxRtt)
 	assert.True(t, pingRtt("111", -1) > maxRtt)
 	mocker := mock.Mocker{}
 	defer mocker.Reset()
