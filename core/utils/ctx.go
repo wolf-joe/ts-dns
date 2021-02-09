@@ -6,6 +6,13 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+const (
+	loggerKey    = "TS_LOGGER"
+	logIDKey     = "TS_LOG_ID"
+	fieldsKey    = "TS_LOG_FIELDS"
+	RecHandleKey = "TS_REC_HANDLE" // 是否被递归处理
+)
+
 // NewCtx 返回一个已放入logger的ctx，用来传递给CtxInfo
 func NewCtx(logger *logrus.Logger, logID uint16) context.Context {
 	ctx := context.Background()

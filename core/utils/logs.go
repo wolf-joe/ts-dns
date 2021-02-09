@@ -9,12 +9,6 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-const (
-	loggerKey = "TS_LOGGER"
-	logIDKey  = "TS_LOG_ID"
-	fieldsKey = "TS_LOG_FIELDS"
-)
-
 func ctxLog(level logrus.Level, ctx context.Context, format string, args ...interface{}) {
 	var logger *logrus.Logger // 从context内读取logger
 	if val, ok := ctx.Value(loggerKey).(*logrus.Logger); ok {
