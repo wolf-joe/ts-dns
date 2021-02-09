@@ -84,11 +84,11 @@ func NewABPByText(text string) (matcher *ABPlus) {
 	}
 	matcher = &ABPlus{isBlocked: map[string]bool{}}
 	for _, line := range strings.Split(text, "\n") {
-		line = strings.Trim(line, " \t\r")
+		line = strings.TrimSpace(line)
 		if line == "" || line[0] == '!' || line[0] == '[' {
 			continue // 忽略空行、注释行、类型声明
 		} else if line[0] == '/' { // path类规则
-			if line[:13] == "/^https?:\\/\\/" && line[len(line)-5:] == "\\/.*/" { // google正则补丁
+			if len(line) > 13 && line[:13] == "/^https?:\\/\\/" && line[len(line)-5:] == "\\/.*/" { // google正则补丁
 				reg := regexp.MustCompile(line[13 : len(line)-5])
 				matcher.blockedRegs = append(matcher.blockedRegs, reg)
 			}
@@ -103,7 +103,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 			regStr := strings.Replace(domain, ".", "\\.", -1)
 			regStr = strings.Replace(regStr, "*", ".*", -1)
 			regex := regexp.MustCompile("^" + regStr + "$")
-			if line[:2] == "@@" {
+			if len(line) > 2 && line[:2] == "@@" {
 				matcher.unblockedRegs = append(matcher.unblockedRegs, regex)
 			} else {
 				matcher.blockedRegs = append(matcher.blockedRegs, regex)
