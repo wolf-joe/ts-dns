@@ -11,6 +11,7 @@ type fakeRespWriter struct {
 	Bytes []byte
 }
 
+// NewFakeRespWriter 创建一个FakeRespWriter，用于手动请求dns.Handler时获取DNS响应
 func NewFakeRespWriter() *fakeRespWriter {
 	return &fakeRespWriter{}
 }

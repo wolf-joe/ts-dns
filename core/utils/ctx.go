@@ -12,7 +12,7 @@ const (
 	loggerKey ctxKey = "TS_LOGGER"
 	logIDKey  ctxKey = "TS_LOG_ID"
 	fieldsKey ctxKey = "TS_LOG_FIELDS"
-	// 是否被递归处理
+	// RecHandleKey 是否被递归处理
 	RecHandleKey ctxKey = "TS_REC_HANDLE"
 )
 
