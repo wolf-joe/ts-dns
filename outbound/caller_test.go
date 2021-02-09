@@ -13,8 +13,8 @@ import (
 	"github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
-	mock "github.com/wolf-joe/ts-dns/core/mocker"
 	"github.com/wolf-joe/ts-dns/core/utils"
+	"github.com/wolf-joe/ts-dns/core/utils/mock"
 	"golang.org/x/net/proxy"
 )
 

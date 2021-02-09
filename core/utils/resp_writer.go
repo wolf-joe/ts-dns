@@ -1,4 +1,4 @@
-package mocker
+package utils
 
 import (
 	"net"

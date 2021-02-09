@@ -2,12 +2,14 @@ package inbound
 
 import (
 	"fmt"
+
 	"github.com/agiledragon/gomonkey"
 	"github.com/miekg/dns"
 	"github.com/sparrc/go-ping"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	mock "github.com/wolf-joe/ts-dns/core/mocker"
+	"github.com/wolf-joe/ts-dns/core/utils/mock"
+
 	"net"
 	"testing"
 )

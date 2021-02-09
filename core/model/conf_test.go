@@ -11,7 +11,7 @@ import (
 	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
-	mock "github.com/wolf-joe/ts-dns/core/mocker"
+	"github.com/wolf-joe/ts-dns/core/utils/mock"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/inbound"
 	"github.com/wolf-joe/ts-dns/matcher"

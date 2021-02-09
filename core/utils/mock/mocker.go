@@ -1,8 +1,9 @@
-package mocker
+package mock
 
 import (
-	"github.com/agiledragon/gomonkey"
 	"reflect"
+
+	"github.com/agiledragon/gomonkey"
 )
 
 // Mocker gomonkey的封装
