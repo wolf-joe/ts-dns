@@ -24,8 +24,7 @@ func recursiveDetect(ctx context.Context, handler Handler) (context.Context, boo
 	}
 	if history[handler] {
 		return ctx, true
-	} else {
-		history[handler] = true
-		return ctx, false
 	}
+	history[handler] = true
+	return ctx, false
 }

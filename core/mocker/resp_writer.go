@@ -6,41 +6,45 @@ import (
 	"github.com/miekg/dns"
 )
 
-type FakeRespWriter struct {
+type fakeRespWriter struct {
 	Msg   *dns.Msg
 	Bytes []byte
 }
 
-func (w *FakeRespWriter) LocalAddr() net.Addr {
+func NewFakeRespWriter() *fakeRespWriter {
+	return &fakeRespWriter{}
+}
+
+func (w *fakeRespWriter) LocalAddr() net.Addr {
 	return &net.IPAddr{IP: []byte{127, 0, 0, 1}}
 }
 
-func (w *FakeRespWriter) RemoteAddr() net.Addr {
+func (w *fakeRespWriter) RemoteAddr() net.Addr {
 	return &net.IPAddr{IP: []byte{127, 0, 0, 1}}
 }
 
-func (w *FakeRespWriter) WriteMsg(msg *dns.Msg) error {
+func (w *fakeRespWriter) WriteMsg(msg *dns.Msg) error {
 	w.Msg = msg
 	return nil
 }
 
-func (w *FakeRespWriter) Write(bytes []byte) (int, error) {
+func (w *fakeRespWriter) Write(bytes []byte) (int, error) {
 	w.Bytes = bytes
 	return len(bytes), nil
 }
 
-func (w *FakeRespWriter) Close() error {
+func (w *fakeRespWriter) Close() error {
 	return nil
 }
 
-func (w *FakeRespWriter) TsigStatus() error {
+func (w *fakeRespWriter) TsigStatus() error {
 	return nil
 }
 
-func (w *FakeRespWriter) TsigTimersOnly(bool) {
+func (w *fakeRespWriter) TsigTimersOnly(bool) {
 	return
 }
 
-func (w *FakeRespWriter) Hijack() {
+func (w *fakeRespWriter) Hijack() {
 	return
 }

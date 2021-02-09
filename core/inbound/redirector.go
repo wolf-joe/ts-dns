@@ -15,8 +15,10 @@ import (
 type IPRedRule int
 
 const (
-	IPRedTypeIfFind    IPRedRule = iota // 如果响应里出现匹配指定范围的ip地址
-	IPRedTypeIfNotFind                  // 如果响应里未出现匹配指定范围的ip地址
+	// 如果响应里出现匹配指定范围的ip地址
+	IPRedTypeIfFind IPRedRule = iota
+	// 如果响应里未出现匹配指定范围的ip地址
+	IPRedTypeIfNotFind
 )
 
 // IPRedirector 基于DNS响应中IP地址的重定向器
@@ -76,8 +78,10 @@ func (red *IPRedirector) Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg 
 type DomainRedRule int
 
 const (
-	DomainRedRuleIfMatch    DomainRedRule = iota // 如果请求的域名匹配指定规则
-	DomainRedRuleIfNotMatch                      // 如果请求的域名匹配指定规则
+	// 如果请求的域名匹配指定规则
+	DomainRedRuleIfMatch DomainRedRule = iota
+	// 如果请求的域名匹配指定规则
+	DomainRedRuleIfNotMatch
 )
 
 // DomainRedirector 基于DNS请求中目标域名的重定向器

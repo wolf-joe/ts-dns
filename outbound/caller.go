@@ -139,7 +139,7 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 		MsgHdr:   dns.MsgHdr{Id: 0xffff, RecursionDesired: true, AuthenticatedData: true},
 		Question: []dns.Question{{Name: name, Qtype: dns.TypeA, Qclass: dns.ClassINET}},
 	}
-	writer := &mock.FakeRespWriter{}
+	writer := mock.NewFakeRespWriter()
 	done := make(chan interface{}, 1)
 	go func() {
 		if caller.resolver != nil {

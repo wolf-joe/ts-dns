@@ -6,11 +6,14 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+type ctxKey string
+
 const (
-	loggerKey    = "TS_LOGGER"
-	logIDKey     = "TS_LOG_ID"
-	fieldsKey    = "TS_LOG_FIELDS"
-	RecHandleKey = "TS_REC_HANDLE" // 是否被递归处理
+	loggerKey ctxKey = "TS_LOGGER"
+	logIDKey  ctxKey = "TS_LOG_ID"
+	fieldsKey ctxKey = "TS_LOG_FIELDS"
+	// 是否被递归处理
+	RecHandleKey ctxKey = "TS_REC_HANDLE"
 )
 
 // NewCtx 返回一个已放入logger的ctx，用来传递给CtxInfo

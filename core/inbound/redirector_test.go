@@ -14,15 +14,15 @@ import (
 
 type copyRespHandler struct{}
 
-func (_ *copyRespHandler) Call(_ context.Context, _, resp *dns.Msg) *dns.Msg { return resp.Copy() }
-func (_ *copyRespHandler) String() string                                    { return "copyRespHandler" }
+func (*copyRespHandler) Call(_ context.Context, _, resp *dns.Msg) *dns.Msg { return resp.Copy() }
+func (*copyRespHandler) String() string                                    { return "copyRespHandler" }
 
 type toNextHandler struct{ next Handler }
 
 func (h *toNextHandler) Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
 	return h.next.Call(ctx, req, resp)
 }
-func (_ *toNextHandler) String() string { return "toNextHandler" }
+func (*toNextHandler) String() string { return "toNextHandler" }
 
 func TestIPSetRedirector(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)

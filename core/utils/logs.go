@@ -9,7 +9,7 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-func ctxLog(level logrus.Level, ctx context.Context, format string, args ...interface{}) {
+func ctxLog(ctx context.Context, level logrus.Level, format string, args ...interface{}) {
 	var logger *logrus.Logger // 从context内读取logger
 	if val, ok := ctx.Value(loggerKey).(*logrus.Logger); ok {
 		logger = val
@@ -37,20 +37,20 @@ func ctxLog(level logrus.Level, ctx context.Context, format string, args ...inte
 
 // CtxDebug logger.Debugf的封装，logger从context中获取
 func CtxDebug(ctx context.Context, format string, args ...interface{}) {
-	ctxLog(logrus.DebugLevel, ctx, format, args...)
+	ctxLog(ctx, logrus.DebugLevel, format, args...)
 }
 
 // CtxInfo logger.Infof的封装，logger从context中获取
 func CtxInfo(ctx context.Context, format string, args ...interface{}) {
-	ctxLog(logrus.InfoLevel, ctx, format, args...)
+	ctxLog(ctx, logrus.InfoLevel, format, args...)
 }
 
 // CtxWarn logger.Warnf的封装，logger从context中获取
 func CtxWarn(ctx context.Context, format string, args ...interface{}) {
-	ctxLog(logrus.WarnLevel, ctx, format, args...)
+	ctxLog(ctx, logrus.WarnLevel, format, args...)
 }
 
-// CtxWarn logger.Errorf的封装，logger从context中获取
+// CtxError logger.Errorf的封装，logger从context中获取
 func CtxError(ctx context.Context, format string, args ...interface{}) {
-	ctxLog(logrus.ErrorLevel, ctx, format, args...)
+	ctxLog(ctx, logrus.ErrorLevel, format, args...)
 }
