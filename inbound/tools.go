@@ -36,9 +36,6 @@ func fastestA(ctx context.Context, ch <-chan *dns.Msg, chLen int, tcpPort int) *
 	var fastestMsg *dns.Msg // 最早抵达的msg，当测速失败时使用该响应返回
 	for i := 0; i < chLen; i++ {
 		msg := <-ch
-		if len(msgMap) >= maxGoNum {
-			continue // 消费chLen内剩余msg
-		}
 		if fastestMsg == nil {
 			fastestMsg = msg
 		}
@@ -48,11 +45,12 @@ func fastestA(ctx context.Context, ch <-chan *dns.Msg, chLen int, tcpPort int) *
 				allIP = append(allIP, ipV4)
 				msgMap[ipV4] = msg
 				if len(msgMap) >= maxGoNum {
-					break
+					goto doPing
 				}
 			}
 		}
 	}
+doPing:
 	switch len(msgMap) {
 	case 0: // 没有任何IPv4地址
 		return fastestMsg
@@ -62,26 +60,21 @@ func fastestA(ctx context.Context, ch <-chan *dns.Msg, chLen int, tcpPort int) *
 		}
 	}
 	// 并发测速
-	doneCh := make(chan interface{}, 0)
-	resCh := make(chan string, 1)
+	begin := time.Now()
+	pingDone := make(chan string, len(msgMap))
 	for ipV4 := range msgMap {
 		go func(addr string) {
 			if err := utils.PingIP(addr, tcpPort, pingTimeout); err == nil {
-				select {
-				case resCh <- addr:
-				case <-doneCh:
-				}
+				pingDone <- addr
 			}
 		}(ipV4)
 	}
 	var fastestIP string // 第一个从resCh返回的地址就是ping值最低的地址
-	begin := time.Now()
 	select {
-	case fastestIP = <-resCh:
+	case fastestIP = <-pingDone:
 	case <-time.After(pingTimeout):
 	}
 	cost := time.Now().Sub(begin).Milliseconds()
-	close(doneCh) // 结束其它ping成功的任务
 	utils.CtxDebug(ctx, "fastest ip of %s: %s(%dms)", allIP, fastestIP, cost)
 	if msg, exists := msgMap[fastestIP]; exists && fastestIP != "" {
 		// 删除msg内除fastestIP之外的其它A记录

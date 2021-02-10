@@ -25,8 +25,7 @@ func TestFastestA(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	ctx := utils.NewCtx(nil, 0xffff)
 	tcpPort := -1
-	chLen := 3
-	ch := make(chan *dns.Msg, chLen)
+	ch := make(chan *dns.Msg, 3)
 	emptyMsg := &dns.Msg{}
 
 	mocker := mock.Mocker{}
@@ -53,8 +52,7 @@ func TestFastestA(t *testing.T) {
 	msg := makeMsg()
 	ch <- nil
 	ch <- msg
-	ch <- nil
-	assert.Equal(t, msg, fastestA(ctx, ch, chLen, tcpPort))
+	assert.Equal(t, msg, fastestA(ctx, ch, 2, tcpPort))
 
 	mocker.Func(utils.PingIP, func(addr string, _ int, _ time.Duration) error {
 		switch addr {
@@ -70,7 +68,7 @@ func TestFastestA(t *testing.T) {
 	ch <- nil
 	ch <- makeMsg()
 	ch <- nil
-	msg = fastestA(ctx, ch, chLen, tcpPort)
+	msg = fastestA(ctx, ch, 3, tcpPort)
 	assert.NotNil(t, msg)
 	assert.Equal(t, 1, len(msg.Answer))
 	assert.Equal(t, "1.1.1.10", msg.Answer[0].(*dns.A).A.String())
