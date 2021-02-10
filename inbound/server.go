@@ -51,7 +51,6 @@ func (group *Group) CallDNS(ctx context.Context, request *dns.Msg) *dns.Msg {
 	}
 	// 遍历DNS服务器
 	for _, caller := range group.Callers {
-		utils.CtxDebug(ctx, "forward question %v to %s", request.Question, caller)
 		if group.Concurrent || group.FastestV4 {
 			go call(caller, request)
 		} else if r := call(caller, request); r != nil {
@@ -66,7 +65,7 @@ func (group *Group) CallDNS(ctx context.Context, request *dns.Msg) *dns.Msg {
 			}
 		}
 	} else if group.FastestV4 { // 选择ping值最低的IPv4地址作为返回值
-		return fastestA(ch, len(group.Callers), group.TCPPingPort)
+		return fastestA(ctx, ch, len(group.Callers), group.TCPPingPort)
 	}
 	return nil
 }

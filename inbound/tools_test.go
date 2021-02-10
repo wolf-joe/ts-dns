@@ -1,74 +1,74 @@
 package inbound
 
 import (
-	"fmt"
+	"errors"
+	"time"
 
-	"github.com/agiledragon/gomonkey"
+	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
-	"github.com/sparrc/go-ping"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/cache"
+	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/core/utils/mock"
 
 	"net"
 	"testing"
 )
 
-func TestTools(t *testing.T) {
+func TestAllInRange(t *testing.T) {
 	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
 	assert.False(t, allInRange(resp, cache.NewRamSetByText("")))
 	assert.True(t, allInRange(resp, cache.NewRamSetByText("1.1.1.1")))
-
-	assert.True(t, pingRtt("299.299.299.299", -1) > maxRtt)
-	assert.True(t, pingRtt("111", -1) > maxRtt)
-	mocker := mock.Mocker{}
-	defer mocker.Reset()
-	mocker.MethodSeq(&ping.Pinger{}, "Statistics", []gomonkey.Params{
-		{&ping.Statistics{PacketsRecv: 1, AvgRtt: maxRtt - 1}},
-	})
-	assert.True(t, pingRtt("1.1.1.1", -1) < maxRtt)
-	// 测试tcp ping
-	mocker.FuncSeq(net.DialTimeout, []gomonkey.Params{
-		{nil, fmt.Errorf("err")}, {&net.TCPConn{}, nil},
-	})
-	mocker.MethodSeq(&net.TCPConn{}, "Close", []gomonkey.Params{{nil}})
-	assert.True(t, pingRtt("1.1.1.1", 80) > maxRtt)
-	assert.True(t, pingRtt("1.1.1.1", 80) < maxRtt)
 }
 
-func TestTools_FastestA(t *testing.T) {
-	// 预设ping rtt值
-	gomonkey.ApplyFunc(pingRtt, func(ip string, _ int) int64 {
-		if ip == "1.1.1.1" {
-			return 100
-		}
-		return 200
+func TestFastestA(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	ctx := utils.NewCtx(nil, 0xffff)
+	tcpPort := -1
+	chLen := 3
+	ch := make(chan *dns.Msg, chLen)
+	emptyMsg := &dns.Msg{}
+
+	mocker := mock.Mocker{}
+	defer mocker.Reset()
+	mocker.Func(utils.PingIP, func(string, int, time.Duration) error {
+		return errors.New("cannot ping now")
 	})
 
-	chLen := 4
-	ch := make(chan *dns.Msg, chLen)
-	ch <- &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 1)}}}
-	ch <- &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 2)}}}
-	ch <- &dns.Msg{Answer: []dns.RR{&dns.A{A: net.IPv4(1, 1, 1, 2)}}}
+	ch <- emptyMsg
+	assert.Nil(t, fastestA(ctx, ch, 0, tcpPort))
+	assert.Equal(t, emptyMsg, fastestA(ctx, ch, 1, tcpPort))
+
+	ch <- &dns.Msg{Answer: []dns.RR{&dns.A{A: []byte{1, 1, 1, 1}}}}
+	ch <- &dns.Msg{Answer: []dns.RR{&dns.A{A: []byte{1, 1, 1, 1}}}}
+	assert.NotNil(t, fastestA(ctx, ch, 2, tcpPort))
+
+	makeMsg := func() *dns.Msg {
+		msg := &dns.Msg{}
+		for i := byte(1); i < 255; i++ {
+			msg.Answer = append(msg.Answer, &dns.A{A: []byte{1, 1, 1, i}})
+		}
+		return msg
+	}
+	msg := makeMsg()
 	ch <- nil
-	msg := fastestA(ch, chLen, -1)
-	assert.NotNil(t, msg)
-	assert.Equal(t, msg.Answer[0].(*dns.A).A.String(), "1.1.1.1")
-
-	chLen = 0
-	ch = make(chan *dns.Msg, chLen)
-	msg = fastestA(ch, chLen, -1)
-	assert.Nil(t, msg)
-
-	chLen = 1
-	ch = make(chan *dns.Msg, chLen)
+	ch <- msg
 	ch <- nil
-	msg = fastestA(ch, chLen, -1)
-	assert.Nil(t, msg)
+	assert.Equal(t, msg, fastestA(ctx, ch, chLen, tcpPort))
 
-	chLen = 1
-	ch = make(chan *dns.Msg, chLen)
-	ch <- &dns.Msg{Answer: []dns.RR{&dns.AAAA{}}}
-	msg = fastestA(ch, chLen, -1)
+	mocker.Func(utils.PingIP, func(addr string, _ int, _ time.Duration) error {
+		switch addr {
+		case "1.1.1.10":
+			return nil
+		default:
+			return errors.New("timeout")
+		}
+	})
+	ch <- nil
+	ch <- makeMsg()
+	ch <- nil
+	msg = fastestA(ctx, ch, chLen, tcpPort)
 	assert.NotNil(t, msg)
+	assert.Equal(t, 1, len(msg.Answer))
+	assert.Equal(t, "1.1.1.10", msg.Answer[0].(*dns.A).A.String())
 }

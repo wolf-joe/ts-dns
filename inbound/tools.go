@@ -1,19 +1,19 @@
 package inbound
 
 import (
-	log "github.com/Sirupsen/logrus"
+	"context"
+	"net"
+	"time"
+
 	"github.com/miekg/dns"
-	"github.com/sparrc/go-ping"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
-	"math"
-	"net"
-	"strconv"
-	"sync"
-	"time"
+	"github.com/wolf-joe/ts-dns/core/utils"
 )
 
-const maxRtt = 500
+const (
+	pingTimeout = 500 * time.Millisecond
+)
 
 // 如dns响应中所有ipv4地址都在目标范围内（或没有ipv4地址）返回true，否则返回False
 func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
@@ -25,76 +25,73 @@ func allInRange(r *dns.Msg, ipRange *cache.RamSet) bool {
 	return true
 }
 
-// 获取到目标ip的ping值（毫秒），当tcpPort大于0时使用tcp ping，否则使用icmp ping
-func pingRtt(ip string, tcpPort int) (rtt int64) {
-	if tcpPort > 0 { // 使用tcp ping
-		begin, addr := time.Now(), ip+":"+strconv.Itoa(tcpPort)
-		conn, err := net.DialTimeout("tcp", addr, time.Millisecond*maxRtt)
-		if err != nil {
-			return maxRtt + 1
-		}
-		defer func() { _ = conn.Close() }()
-		rtt = time.Now().Sub(begin).Milliseconds()
-		return rtt
+func fastestA(ctx context.Context, ch <-chan *dns.Msg, chLen int, tcpPort int) *dns.Msg {
+	if chLen == 0 {
+		return nil
 	}
-	// 使用icmp ping
-	task, err := ping.NewPinger(ip)
-	if err != nil {
-		return maxRtt + 1
-	}
-	task.Count, task.Timeout = 1, time.Millisecond*maxRtt
-	task.SetPrivileged(true)
-	task.Run()
-	stat := task.Statistics()
-	if stat.PacketsRecv >= 1 {
-		return stat.AvgRtt.Milliseconds()
-	}
-	return maxRtt + 1
-}
-
-// 从dns msg chan中找出ping值最低的ipv4地址并将其所属的A记录打包返回
-func fastestA(ch chan *dns.Msg, chLen int, tcpPort int) (res *dns.Msg) {
-	aLock, rttLock, wg := new(sync.Mutex), new(sync.Mutex), new(sync.WaitGroup)
-	aMap, rttMap := map[string]dns.A{}, map[string]int64{}
+	const maxGoNum = 15 // 最大并发数量
+	// 从msg ch中提取所有IPv4地址，并建立IPv4地址到msg的映射
+	allIP := make([]string, 0, maxGoNum)
+	msgMap := make(map[string]*dns.Msg, maxGoNum)
+	var fastestMsg *dns.Msg // 最早抵达的msg，当测速失败时使用该响应返回
 	for i := 0; i < chLen; i++ {
-		msg := <-ch // 从chan中取出一个msg
-		if msg != nil {
-			res = msg // 防止被最后出现的nil覆盖
+		msg := <-ch
+		if len(msgMap) >= maxGoNum {
+			continue // 消费chLen内剩余msg
+		}
+		if fastestMsg == nil {
+			fastestMsg = msg
 		}
 		for _, a := range common.ExtractA(msg) {
-			ipv4, aObj := a.A.String(), *a // 用aObj实体变量来防止aMap的键值不一致
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				aLock.Lock()
-				if _, ok := aMap[ipv4]; ok { // 防止重复ping
-					aLock.Unlock()
-					return
+			ipV4 := a.A.String()
+			if _, exists := msgMap[ipV4]; !exists {
+				allIP = append(allIP, ipV4)
+				msgMap[ipV4] = msg
+				if len(msgMap) >= maxGoNum {
+					break
 				}
-				aMap[ipv4] = aObj
-				aLock.Unlock()
-				// 并发测速
-				rtt := pingRtt(ipv4, tcpPort)
-				rttLock.Lock()
-				rttMap[ipv4] = rtt
-				rttLock.Unlock()
-			}()
+			}
 		}
 	}
-	wg.Wait()
-	// 查找ping最小的ipv4地址
-	lowestRtt, fastestIP := int64(math.MaxInt64), ""
-	for ipv4, rtt := range rttMap {
-		if rtt < maxRtt && rtt < lowestRtt {
-			lowestRtt, fastestIP = rtt, ipv4
+	switch len(msgMap) {
+	case 0: // 没有任何IPv4地址
+		return fastestMsg
+	case 1: // 只有一个IPv4地址
+		for _, msg := range msgMap {
+			return msg
 		}
 	}
-	// 用ping最小的ipv4地址覆盖msg
-	if aObj := aMap[fastestIP]; fastestIP != "" && res != nil {
-		common.RemoveA(res)
-		res.Answer = append(res.Answer, &aObj)
-	} else {
-		log.Error("find fastest ipv4 failed")
+	// 并发测速
+	doneCh := make(chan interface{}, 0)
+	resCh := make(chan string, 1)
+	for ipV4 := range msgMap {
+		go func(addr string) {
+			if err := utils.PingIP(addr, tcpPort, pingTimeout); err == nil {
+				select {
+				case resCh <- addr:
+				case <-doneCh:
+				}
+			}
+		}(ipV4)
 	}
-	return
+	var fastestIP string // 第一个从resCh返回的地址就是ping值最低的地址
+	begin := time.Now()
+	select {
+	case fastestIP = <-resCh:
+	case <-time.After(pingTimeout):
+	}
+	cost := time.Now().Sub(begin).Milliseconds()
+	close(doneCh)
+	utils.CtxDebug(ctx, "fastest ip of %s: %s(%dms)", allIP, fastestIP, cost)
+	if msg, exists := msgMap[fastestIP]; exists && fastestIP != "" {
+		// 删除msg内除fastestIP之外的其它A记录
+		for i := 0; i < len(msg.Answer); i++ {
+			if a, ok := msg.Answer[i].(*dns.A); ok && a.A.String() != fastestIP {
+				msg.Answer = append(msg.Answer[:i], msg.Answer[i+1:]...)
+				i--
+			}
+		}
+		return msg
+	}
+	return fastestMsg
 }

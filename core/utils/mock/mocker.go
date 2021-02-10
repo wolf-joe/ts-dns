@@ -20,6 +20,11 @@ func (m *Mocker) FuncSeq(target interface{}, outputs []gomonkey.Params) {
 	m.patches = append(m.patches, gomonkey.ApplyFuncSeq(target, cells))
 }
 
+// Func gomonkey.ApplyFunc的封装
+func (m *Mocker) Func(target interface{}, double interface{}) {
+	m.patches = append(m.patches, gomonkey.ApplyFunc(target, double))
+}
+
 // MethodSeq gomonkey.ApplyMethodSeq的封装
 func (m *Mocker) MethodSeq(target interface{}, method string, outputs []gomonkey.Params) {
 	var cells []gomonkey.OutputCell
