@@ -81,7 +81,7 @@ func fastestA(ctx context.Context, ch <-chan *dns.Msg, chLen int, tcpPort int) *
 	case <-time.After(pingTimeout):
 	}
 	cost := time.Now().Sub(begin).Milliseconds()
-	close(doneCh)
+	close(doneCh) // 结束其它ping成功的任务
 	utils.CtxDebug(ctx, "fastest ip of %s: %s(%dms)", allIP, fastestIP, cost)
 	if msg, exists := msgMap[fastestIP]; exists && fastestIP != "" {
 		// 删除msg内除fastestIP之外的其它A记录

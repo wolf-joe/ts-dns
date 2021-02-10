@@ -60,6 +60,9 @@ func TestFastestA(t *testing.T) {
 		switch addr {
 		case "1.1.1.10":
 			return nil
+		case "1.1.1.1", "1.1.1.2", "1.1.1.3":
+			time.Sleep(50 * time.Millisecond)
+			return nil
 		default:
 			return errors.New("timeout")
 		}
@@ -71,4 +74,6 @@ func TestFastestA(t *testing.T) {
 	assert.NotNil(t, msg)
 	assert.Equal(t, 1, len(msg.Answer))
 	assert.Equal(t, "1.1.1.10", msg.Answer[0].(*dns.A).A.String())
+
+	time.Sleep(100 * time.Millisecond)
 }
