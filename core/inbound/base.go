@@ -9,7 +9,7 @@ import (
 
 // Handler DNS请求处理器，用于将请求转发至上游DNS/其它DNS请求处理器
 type Handler interface {
-	Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg
+	Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg
 	String() string
 }
 

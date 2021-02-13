@@ -2,10 +2,10 @@ package common
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/miekg/dns"
 	"net"
 	"strings"
+
+	"github.com/miekg/dns"
 )
 
 // ExtractA 提取dns响应中的A记录
@@ -93,7 +93,6 @@ func SetDefaultECS(r *dns.Msg, ecs *dns.EDNS0_SUBNET) {
 			}
 		}
 	}
-	log.Debugf("set default ecs %v to msg", ecs)
 	if firstOPTIndex < 0 {
 		// 如果r.Extra为空或所有值都不为*dns.OPT，则在r.Extra的末尾添加一个*dns.OPT
 		opt := &dns.OPT{Option: []dns.EDNS0{ecs}}

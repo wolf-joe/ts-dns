@@ -39,15 +39,15 @@ func (red *IPRedirector) String() string {
 }
 
 // Call 根据ip地址范围和规则决定是否转发至其它处理器
-func (red *IPRedirector) Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
+func (red *IPRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
 	utils.CtxDebug(ctx, "call "+red.String())
 	if red.next == nil {
-		utils.CtxWarn(ctx, "next not set")
+		utils.CtxError(ctx, "next not set")
 		return resp
 	}
-	var recursive bool
+	var recursive bool // 检测是否存在回环处理
 	if ctx, recursive = recursiveDetect(ctx, red); recursive {
-		utils.CtxWarn(ctx, "handle recursive")
+		utils.CtxError(ctx, "handle recursive")
 		return resp
 	}
 	var find bool
@@ -64,12 +64,12 @@ func (red *IPRedirector) Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg 
 		if red.ramSet.Contain(ip) {
 			find = true
 			if red.rule == IPRedTypeIfFind {
-				return red.next.Call(ctx, req, resp)
+				return red.next.Handle(ctx, req, resp)
 			}
 		}
 	}
 	if !find && red.rule == IPRedTypeIfNotFind {
-		return red.next.Call(ctx, req, resp)
+		return red.next.Handle(ctx, req, resp)
 	}
 	return resp
 }
@@ -97,25 +97,25 @@ func NewDomainRedirector(matcher matcher.DomainMatcher, rule DomainRedRule, next
 }
 
 // Call 根据请求域名和规则决定是否转发至其它处理器
-func (red *DomainRedirector) Call(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
+func (red *DomainRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
 	utils.CtxDebug(ctx, "call "+red.String())
 	if red.next == nil {
-		utils.CtxWarn(ctx, "next not set")
+		utils.CtxError(ctx, "next not set")
 		return resp
 	}
-	var recursive bool
+	var recursive bool // 检测是否存在回环处理
 	if ctx, recursive = recursiveDetect(ctx, red); recursive {
-		utils.CtxWarn(ctx, "handle recursive")
+		utils.CtxError(ctx, "handle recursive")
 		return resp
 	}
 	for _, question := range req.Question {
 		if match, ok := red.matcher.Match(question.Name); ok && match {
 			if red.rule == DomainRedRuleIfMatch {
-				return red.next.Call(ctx, req, resp)
+				return red.next.Handle(ctx, req, resp)
 			}
 		} else {
 			if red.rule == DomainRedRuleIfNotMatch {
-				return red.next.Call(ctx, req, resp)
+				return red.next.Handle(ctx, req, resp)
 			}
 		}
 		break // only care about the first question

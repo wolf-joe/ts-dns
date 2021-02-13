@@ -35,6 +35,12 @@ func (m *Mocker) MethodSeq(target interface{}, method string, outputs []gomonkey
 	m.patches = append(m.patches, p)
 }
 
+// Method gomonkey.ApplyMethod的封装
+func (m *Mocker) Method(target interface{}, method string, double interface{}) {
+	t := reflect.TypeOf(target)
+	m.patches = append(m.patches, gomonkey.ApplyMethod(t, method, double))
+}
+
 // Reset 重置所有mock
 func (m *Mocker) Reset() {
 	for _, patches := range m.patches {
