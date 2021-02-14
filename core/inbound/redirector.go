@@ -40,7 +40,7 @@ func (red *IPRedirector) String() string {
 
 // Call 根据ip地址范围和规则决定是否转发至其它处理器
 func (red *IPRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
-	utils.CtxDebug(ctx, "call "+red.String())
+	utils.CtxDebug(ctx, "handle by "+red.String())
 	if red.next == nil {
 		utils.CtxError(ctx, "next not set")
 		return resp
@@ -98,7 +98,7 @@ func NewDomainRedirector(matcher matcher.DomainMatcher, rule DomainRedRule, next
 
 // Call 根据请求域名和规则决定是否转发至其它处理器
 func (red *DomainRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
-	utils.CtxDebug(ctx, "call "+red.String())
+	utils.CtxDebug(ctx, "handle by "+red.String())
 	if red.next == nil {
 		utils.CtxError(ctx, "next not set")
 		return resp

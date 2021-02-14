@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/core/utils"
@@ -119,7 +120,7 @@ func TestGroup(t *testing.T) {
 	assert.Equal(t, mockResp, group.Handle(ctx, req, nil))
 }
 
-func TestGroupReq(t *testing.T) {
+func TestGroup2(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	ctx := utils.NewCtx(nil, 0xffff)
 	req := &dns.Msg{Question: []dns.Question{{Qtype: dns.TypeA}}}
@@ -148,4 +149,17 @@ func TestGroupReq(t *testing.T) {
 	assert.NotNil(t, c.latestReq)
 	assert.NotNil(t, next.latestReq)
 	assert.NotEqual(t, c.latestReq, next.latestReq)
+
+	// test with ipset
+	mockResp.Answer = append(mockResp.Answer, &dns.A{A: []byte{1, 1, 1, 2}})
+	group.IPSet = &ipset.IPSet{}
+	mocker := new(mock.Mocker)
+	defer mocker.Reset()
+	mocker.Method(&ipset.IPSet{}, "Add", func(_ *ipset.IPSet, entry string, _ int) error {
+		if entry == "1.1.1.1" {
+			return nil
+		}
+		return errors.New("err by mock")
+	})
+	_ = group.Handle(ctx, req, nil)
 }

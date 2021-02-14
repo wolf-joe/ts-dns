@@ -27,7 +27,7 @@ type Group struct {
 	fastestIP   bool // 是否对响应中的IP地址进行测速，找出ping值最低的IP地址
 	tcpPingPort int  // 是否使用tcp ping
 
-	ipSet *ipset.IPSet // 是否将响应中的IP地址加入ipset
+	IPSet *ipset.IPSet // IPSet 将响应中的IP地址加入ipset
 	Next  Handler      // Next 下一个DNS请求处理器
 }
 
@@ -44,13 +44,14 @@ func (g *Group) WithFastestIP(tcpPingPort int) {
 
 // Call 处理DNS请求
 func (g *Group) Handle(ctx context.Context, req, _ *dns.Msg) (resp *dns.Msg) {
-	utils.CtxDebug(ctx, "handle by %s", g)
+	utils.CtxDebug(ctx, "handle by "+g.String())
 	var recursive bool // 检测是否存在回环处理
 	if ctx, recursive = recursiveDetect(ctx, g); recursive {
 		utils.CtxError(ctx, "handle recursive")
 		return resp
 	}
 	defer func(req *dns.Msg) {
+		go g.add2IPSet(ctx, resp)
 		if g.Next != nil {
 			resp = g.Next.Handle(ctx, req, resp)
 		}
@@ -184,6 +185,20 @@ doPing:
 		i--
 	}
 	return msg
+}
+
+// 将响应中的IP地址加入ipset
+func (g *Group) add2IPSet(ctx context.Context, resp *dns.Msg) {
+	if resp == nil || g.IPSet == nil {
+		return
+	}
+	for _, answer := range resp.Answer {
+		if a, ok := answer.(*dns.A); ok {
+			if err := g.IPSet.Add(a.A.String(), g.IPSet.Timeout); err != nil {
+				utils.CtxWarn(ctx, "add %s to ipset %s error: %s", a.A, g.IPSet.Name, err)
+			}
+		}
+	}
 }
 
 // String 描述自身
