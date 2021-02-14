@@ -16,12 +16,14 @@ import (
 )
 
 type fakeCaller struct {
-	sleep time.Duration
-	resp  *dns.Msg
-	err   error
+	latestReq *dns.Msg
+	sleep     time.Duration
+	resp      *dns.Msg
+	err       error
 }
 
-func (f *fakeCaller) Call(*dns.Msg) (r *dns.Msg, err error) {
+func (f *fakeCaller) Call(req *dns.Msg) (r *dns.Msg, err error) {
+	f.latestReq = req
 	time.Sleep(f.sleep)
 	if f.err != nil {
 		return nil, f.err
@@ -36,7 +38,7 @@ func (f *fakeCaller) String() string {
 	return fmt.Sprintf("fakeCaller<%s,%p,%p>", f.sleep, f.resp, f.err)
 }
 
-func newFakeCaller(sleep time.Duration, resp *dns.Msg, err error) outbound.Caller {
+func newFakeCaller(sleep time.Duration, resp *dns.Msg, err error) *fakeCaller {
 	return &fakeCaller{sleep: sleep, resp: resp, err: err}
 }
 
@@ -115,4 +117,35 @@ func TestGroup(t *testing.T) {
 	req.Question[0].Qtype = dns.TypeAAAA
 	buildAnswer(true)
 	assert.Equal(t, mockResp, group.Handle(ctx, req, nil))
+}
+
+func TestGroupReq(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	ctx := utils.NewCtx(nil, 0xffff)
+	req := &dns.Msg{Question: []dns.Question{{Qtype: dns.TypeA}}}
+	mockResp := &dns.Msg{Answer: []dns.RR{&dns.A{A: []byte{1, 1, 1, 1}}}}
+	c := newFakeCaller(100*time.Millisecond, mockResp, nil)
+
+	group := NewGroup("test", nil, []outbound.Caller{c})
+	next := &copyRespHandler{}
+	group.Next = next
+
+	c.latestReq, next.latestReq = nil, nil
+	_ = group.Handle(ctx, req, nil)
+	assert.NotNil(t, c.latestReq)
+	assert.NotNil(t, next.latestReq)
+	assert.Equal(t, c.latestReq, next.latestReq)
+
+	group.NoCookie = true
+	_ = group.Handle(ctx, req, nil)
+	assert.NotNil(t, c.latestReq)
+	assert.NotNil(t, next.latestReq)
+	assert.NotEqual(t, c.latestReq, next.latestReq)
+
+	group.NoCookie = false
+	group.WithECS = &dns.EDNS0_SUBNET{}
+	_ = group.Handle(ctx, req, nil)
+	assert.NotNil(t, c.latestReq)
+	assert.NotNil(t, next.latestReq)
+	assert.NotEqual(t, c.latestReq, next.latestReq)
 }

@@ -12,10 +12,13 @@ import (
 	"github.com/wolf-joe/ts-dns/matcher"
 )
 
-type copyRespHandler struct{}
+type copyRespHandler struct{ latestReq *dns.Msg }
 
-func (*copyRespHandler) Handle(_ context.Context, _, resp *dns.Msg) *dns.Msg { return resp.Copy() }
-func (*copyRespHandler) String() string                                      { return "copyRespHandler" }
+func (h *copyRespHandler) Handle(_ context.Context, req, resp *dns.Msg) *dns.Msg {
+	h.latestReq = req
+	return resp.Copy()
+}
+func (*copyRespHandler) String() string { return "copyRespHandler" }
 
 type toNextHandler struct{ next Handler }
 
