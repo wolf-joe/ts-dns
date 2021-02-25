@@ -19,14 +19,14 @@ type DNSServer struct {
 	stopped  chan interface{} // 服务是否停止
 
 	disableQTypes map[uint16]bool // 禁用的DNS查询类型
-	hosts         []*hosts.Reader
+	hosts         []hosts.Reader
 	cache         *cache.DNSCache // DNS响应缓存
 
 	groups map[string]*Group
 }
 
 // NewDNSServer 创建一个DNS Server
-func NewDNSServer(listen, network string, disableQTypes []string, hosts []*hosts.Reader,
+func NewDNSServer(listen, network string, disableQTypes []string, hosts []hosts.Reader,
 	cache *cache.DNSCache, groups map[string]*Group) *DNSServer {
 	qTypes := make(map[uint16]bool, len(disableQTypes))
 	for _, qTypeStr := range disableQTypes {
@@ -103,16 +103,17 @@ func (s *DNSServer) String() string {
 	return fmt.Sprintf("DNSServer<%s/%s>", s.listen, s.network)
 }
 
+// ServeDNS 核心函数，处理DNS查询请求
 func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
 	ctx := utils.NewCtx(nil, req.Id)
-	utils.CtxDebug(ctx, "request: %q", req.Question)
+	utils.CtxDebug(ctx, "request: %v", req.Question)
 
 	var resp *dns.Msg
 	defer func() { // 返回响应
 		if resp == nil {
 			resp = &dns.Msg{}
 		}
-		utils.CtxDebug(ctx, "response: %q", resp.Answer)
+		utils.CtxDebug(ctx, "response: %v", resp.Answer)
 		resp.SetReply(req)
 		_ = writer.WriteMsg(resp)
 		_ = writer.Close()
@@ -122,13 +123,44 @@ func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 	question := req.Question[0]
-	if s.disableQTypes[question.Qtype] {
+	if s.disableQTypes[question.Qtype] { // 判断是否阻止查询
 		return
 	}
+	if resp = s.tryHosts(ctx, question); resp != nil { // 判断是否命中hosts
+		return
+	}
+	if resp = s.cache.Get(req); resp != nil { // 判断是否命中缓存
+		return
+	}
+	defer func() { s.cache.Set(req, resp) }() // 将结果加入缓存
 
 	for _, group := range s.groups {
 		if match, ok := group.matcher.Match(question.Name); ok && match {
 			resp = group.Handle(ctx, req, nil)
 		}
 	}
+}
+
+// tryHosts 如DNS查询请求匹配hosts，则生成对应dns记录并返回。否则返回nil
+func (s *DNSServer) tryHosts(ctx context.Context, question dns.Question) *dns.Msg {
+	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
+		ipv6 := question.Qtype == dns.TypeAAAA
+		for _, reader := range s.hosts {
+			record, hostname := "", question.Name
+			if record = reader.Record(hostname, ipv6); record == "" {
+				// 去掉末尾的根域名再找一次
+				record = reader.Record(hostname[:len(hostname)-1], ipv6)
+			}
+			if record != "" {
+				if ret, err := dns.NewRR(record); err != nil {
+					utils.CtxError(ctx, fmt.Sprintf("make dns.RR for %q: %s", record, err))
+				} else {
+					r := new(dns.Msg)
+					r.Answer = append(r.Answer, ret)
+					return r
+				}
+			}
+		}
+	}
+	return nil
 }
