@@ -56,7 +56,6 @@ func (s *DNSServer) Run(ctx context.Context) {
 	go s.wait(ctx, servers, errCh)
 }
 
-//
 func (s *DNSServer) wait(ctx context.Context, servers []*dns.Server, errCh chan error) {
 	utils.CtxDebug(ctx, "%s is running", s)
 	for _, srv := range servers {
@@ -87,6 +86,9 @@ func (s *DNSServer) wait(ctx context.Context, servers []*dns.Server, errCh chan 
 			}
 			alive = 0
 		}
+	}
+	for _, group := range s.groups {
+		group.Exit()
 	}
 	utils.CtxDebug(ctx, "%s is stopped", s)
 	close(s.stopped)

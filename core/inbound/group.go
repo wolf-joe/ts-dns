@@ -42,7 +42,7 @@ func (g *Group) WithFastestIP(tcpPingPort int) {
 	g.tcpPingPort = tcpPingPort
 }
 
-// Call 处理DNS请求
+// Handle 处理DNS请求
 func (g *Group) Handle(ctx context.Context, req, _ *dns.Msg) (resp *dns.Msg) {
 	utils.CtxDebug(ctx, "handle by "+g.String())
 	var recursive bool // 检测是否存在回环处理
@@ -204,4 +204,11 @@ func (g *Group) add2IPSet(ctx context.Context, resp *dns.Msg) {
 // String 描述自身
 func (g *Group) String() string {
 	return fmt.Sprintf("Group<%s,%d>", g.name, len(g.callers))
+}
+
+// Exit 停止服务
+func (g *Group) Exit() {
+	for _, caller := range g.callers {
+		caller.Exit()
+	}
 }

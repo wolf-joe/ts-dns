@@ -47,7 +47,10 @@ func TestDNSServer(t *testing.T) {
 	defer mocker.Reset()
 
 	ctx := utils.NewCtx(nil, 0xffff)
-	server := NewDNSServer("127.0.0.1:5353", "", nil, nil, nil, nil)
+	allM := matcher.NewABPByText("*")
+	cErr := newFakeCaller(0, nil, errors.New("err"))
+	groups := map[string]*Group{"test": NewGroup("test", allM, []outbound.Caller{cErr})}
+	server := NewDNSServer("127.0.0.1:5353", "", nil, nil, nil, groups)
 
 	utils.CtxInfo(ctx, "---- test listen error ----")
 	mockListenAndServe(mocker, 10*time.Millisecond, "unavailable now")
@@ -61,7 +64,7 @@ func TestDNSServer(t *testing.T) {
 	server.StopAndWait()
 
 	utils.CtxInfo(ctx, "---- test shutdown error ----")
-	server = NewDNSServer("127.0.0.1:5353", "udp", nil, nil, nil, nil)
+	server = NewDNSServer("127.0.0.1:5353", "udp", nil, nil, nil, groups)
 	mockShutdownContext(mocker, "system is busy")
 	server.Run(ctx)
 	time.Sleep(20 * time.Millisecond)

@@ -38,7 +38,7 @@ func (red *IPRedirector) String() string {
 	return fmt.Sprintf("IPRedirector<%d>", red.rule)
 }
 
-// Call 根据ip地址范围和规则决定是否转发至其它处理器
+// Handle 根据ip地址范围和规则决定是否转发至其它处理器
 func (red *IPRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
 	utils.CtxDebug(ctx, "handle by "+red.String())
 	if red.next == nil {
@@ -96,7 +96,7 @@ func NewDomainRedirector(matcher matcher.DomainMatcher, rule DomainRedRule, next
 	return &DomainRedirector{matcher: matcher, rule: rule, next: next}
 }
 
-// Call 根据请求域名和规则决定是否转发至其它处理器
+// Handle 根据请求域名和规则决定是否转发至其它处理器
 func (red *DomainRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Msg {
 	utils.CtxDebug(ctx, "handle by "+red.String())
 	if red.next == nil {

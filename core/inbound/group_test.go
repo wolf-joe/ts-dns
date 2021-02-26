@@ -152,6 +152,7 @@ func TestGroup2(t *testing.T) {
 
 	// test with ipset
 	mockResp.Answer = append(mockResp.Answer, &dns.A{A: []byte{1, 1, 1, 2}})
+	group = NewGroup("test", nil, []outbound.Caller{c})
 	group.IPSet = &ipset.IPSet{}
 	mocker := new(mock.Mocker)
 	defer mocker.Reset()
