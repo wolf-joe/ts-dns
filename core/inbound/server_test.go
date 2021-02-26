@@ -50,7 +50,8 @@ func TestDNSServer(t *testing.T) {
 	allM := matcher.NewABPByText("*")
 	cErr := newFakeCaller(0, nil, errors.New("err"))
 	groups := map[string]*Group{"test": NewGroup("test", allM, []outbound.Caller{cErr})}
-	server := NewDNSServer("127.0.0.1:5353", "", nil, nil, nil, groups)
+	logCfg := NewLogConfig(nil, nil, false, false)
+	server := NewDNSServer("127.0.0.1:5353", "", groups, logCfg)
 
 	utils.CtxInfo(ctx, "---- test listen error ----")
 	mockListenAndServe(mocker, 10*time.Millisecond, "unavailable now")
@@ -64,7 +65,7 @@ func TestDNSServer(t *testing.T) {
 	server.StopAndWait()
 
 	utils.CtxInfo(ctx, "---- test shutdown error ----")
-	server = NewDNSServer("127.0.0.1:5353", "udp", nil, nil, nil, groups)
+	server = NewDNSServer("127.0.0.1:5353", "udp", groups, logCfg)
 	mockShutdownContext(mocker, "system is busy")
 	server.Run(ctx)
 	time.Sleep(20 * time.Millisecond)
@@ -109,13 +110,13 @@ func TestDNSServer_ServeDNS(t *testing.T) {
 	ctx := utils.NewCtx(nil, 0xffff)
 	allMatcher := matcher.NewABPByText("*")
 	errCaller := newFakeCaller(0, nil, errors.New("call error"))
-	hostsReader := hosts.NewReaderByText("127.0.0.1 baidu.com")
-	dnsCache := cache.NewDNSCache(100, time.Minute, time.Hour)
+	logCfg := NewLogConfig(nil, nil, false, false)
 	groups := make(map[string]*Group)
 	// endregion
 
 	utils.CtxInfo(ctx, "---- test begin ----")
-	server := NewDNSServer("", "", []string{"NS"}, nil, dnsCache, nil)
+	server := NewDNSServer("", "", nil, logCfg)
+	server.SetDisableQTypes([]string{"NS"})
 
 	writer.Msg = nil
 	server.ServeDNS(writer, &dns.Msg{Question: []dns.Question{}})
@@ -131,7 +132,7 @@ func TestDNSServer_ServeDNS(t *testing.T) {
 
 	utils.CtxInfo(ctx, "---- test call err ----")
 	groups["all"] = NewGroup("all", allMatcher, []outbound.Caller{errCaller})
-	server = NewDNSServer("", "", nil, nil, dnsCache, groups)
+	server = NewDNSServer("", "", groups, logCfg)
 
 	writer.Msg = nil
 	server.ServeDNS(writer, newReq("abc", dns.TypeA))
@@ -139,8 +140,9 @@ func TestDNSServer_ServeDNS(t *testing.T) {
 
 	utils.CtxInfo(ctx, "---- test hit hosts ----")
 	groups["all"] = NewGroup("all", allMatcher, []outbound.Caller{errCaller})
-	_h := []hosts.Reader{hostsReader}
-	server = NewDNSServer("", "", nil, _h, dnsCache, groups)
+	hostsReader := hosts.NewReaderByText("127.0.0.1 baidu.com")
+	server = NewDNSServer("", "", groups, logCfg)
+	server.Hosts = []hosts.Reader{hostsReader}
 
 	writer.Msg = nil
 	server.ServeDNS(writer, newReq("BAIDU.COM.", dns.TypeA))
@@ -156,7 +158,8 @@ func TestDNSServer_ServeDNS(t *testing.T) {
 	utils.CtxInfo(ctx, "---- test hit cache ----")
 	caller := newOneTimeCaller(newResp([]dns.RR{&dns.A{A: []byte{1, 1, 1, 1}}}))
 	groups["all"] = NewGroup("all", allMatcher, []outbound.Caller{caller})
-	server = NewDNSServer("", "", nil, nil, dnsCache, groups)
+	server = NewDNSServer("", "", groups, logCfg)
+	server.Cache = cache.NewDNSCache(100, time.Minute, time.Hour)
 
 	writer.Msg = nil
 	server.ServeDNS(writer, newReq("BAIDU.COM.", dns.TypeA))

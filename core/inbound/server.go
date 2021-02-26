@@ -3,8 +3,11 @@ package inbound
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/utils"
@@ -19,24 +22,26 @@ type DNSServer struct {
 	stopped  chan interface{} // 服务是否停止
 
 	disableQTypes map[uint16]bool // 禁用的DNS查询类型
-	hosts         []hosts.Reader
-	cache         *cache.DNSCache // DNS响应缓存
+	Hosts         []hosts.Reader  // Hosts hosts列表
+	Cache         *cache.DNSCache // Cache DNS响应缓存
+	logCfg        *logConfig
 
 	groups map[string]*Group
 }
 
 // NewDNSServer 创建一个DNS Server
-func NewDNSServer(listen, network string, disableQTypes []string, hosts []hosts.Reader,
-	cache *cache.DNSCache, groups map[string]*Group) *DNSServer {
-	qTypes := make(map[uint16]bool, len(disableQTypes))
-	for _, qTypeStr := range disableQTypes {
+func NewDNSServer(listen, network string, groups map[string]*Group, logCfg *logConfig) *DNSServer {
+	dnsCache := cache.NewDNSCache(1024, time.Minute, 24*time.Hour)
+	return &DNSServer{listen: listen, network: network, logCfg: logCfg, groups: groups, Cache: dnsCache}
+}
+
+// SetDisableQTypes 设置禁止查询的类型
+func (s *DNSServer) SetDisableQTypes(qTypes []string) {
+	s.disableQTypes = make(map[uint16]bool, len(qTypes))
+	for _, qTypeStr := range qTypes {
 		if qType, exists := dns.StringToType[strings.ToUpper(qTypeStr)]; exists {
-			qTypes[qType] = true
+			s.disableQTypes[qType] = true
 		}
-	}
-	return &DNSServer{
-		listen: listen, network: network, disableQTypes: qTypes,
-		hosts: hosts, cache: cache, groups: groups,
 	}
 }
 
@@ -90,6 +95,9 @@ func (s *DNSServer) wait(ctx context.Context, servers []*dns.Server, errCh chan 
 	for _, group := range s.groups {
 		group.Exit()
 	}
+	if err := s.logCfg.exit(); err != nil {
+		utils.CtxWarn(ctx, err.Error())
+	}
 	utils.CtxDebug(ctx, "%s is stopped", s)
 	close(s.stopped)
 }
@@ -107,15 +115,17 @@ func (s *DNSServer) String() string {
 
 // ServeDNS 核心函数，处理DNS查询请求
 func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
-	ctx := utils.NewCtx(nil, req.Id)
-	utils.CtxDebug(ctx, "request: %v", req.Question)
+	ctx := utils.NewCtx(s.logCfg.logger, req.Id)
+	ctx = utils.WithFields(ctx, s.logCfg.getFields(writer, req))
+	utils.CtxDebug(ctx, "extra: %s", req.Extra)
 
 	var resp *dns.Msg
+	var hitHosts, hitCache bool
 	defer func() { // 返回响应
 		if resp == nil {
 			resp = &dns.Msg{}
 		}
-		utils.CtxDebug(ctx, "response: %v", resp.Answer)
+		s.logCfg.logFunc(req, hitHosts, hitCache)(ctx, "response: %s", resp.Answer)
 		resp.SetReply(req)
 		_ = writer.WriteMsg(resp)
 		_ = writer.Close()
@@ -129,16 +139,19 @@ func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 	if resp = s.tryHosts(ctx, question); resp != nil { // 判断是否命中hosts
+		hitHosts = true
 		return
 	}
-	if resp = s.cache.Get(req); resp != nil { // 判断是否命中缓存
+	if resp = s.Cache.Get(req); resp != nil { // 判断是否命中缓存
+		hitCache = true
 		return
 	}
-	defer func() { s.cache.Set(req, resp) }() // 将结果加入缓存
+	defer func() { s.Cache.Set(req, resp) }() // 将结果加入缓存
 
 	for _, group := range s.groups {
 		if match, ok := group.matcher.Match(question.Name); ok && match {
 			resp = group.Handle(ctx, req, nil)
+			break
 		}
 	}
 }
@@ -147,7 +160,7 @@ func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
 func (s *DNSServer) tryHosts(ctx context.Context, question dns.Question) *dns.Msg {
 	if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
 		ipv6 := question.Qtype == dns.TypeAAAA
-		for _, reader := range s.hosts {
+		for _, reader := range s.Hosts {
 			record, hostname := "", question.Name
 			if record = reader.Record(hostname, ipv6); record == "" {
 				// 去掉末尾的根域名再找一次
@@ -163,6 +176,62 @@ func (s *DNSServer) tryHosts(ctx context.Context, question dns.Question) *dns.Ms
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// NewLogConfig 初始化一个请求日志配置
+func NewLogConfig(closer io.WriteCloser, ignoreQTypes []string,
+	ignoreHosts, ignoreCache bool) *logConfig {
+	logger := logrus.New()
+	logger.SetLevel(logrus.StandardLogger().Level)
+	if closer != nil {
+		logrus.SetOutput(closer)
+	}
+	qTypes := make(map[uint16]bool, len(ignoreQTypes))
+	for _, qTypeStr := range ignoreQTypes {
+		if qType, exists := dns.StringToType[strings.ToUpper(qTypeStr)]; exists {
+			qTypes[qType] = true
+		}
+	}
+	return &logConfig{closer: closer, logger: logger, ignoreQTypes: qTypes,
+		ignoreHosts: ignoreHosts, ignoreCache: ignoreCache}
+}
+
+type logConfig struct {
+	closer       io.WriteCloser
+	logger       *logrus.Logger
+	ignoreQTypes map[uint16]bool
+	ignoreHosts  bool
+	ignoreCache  bool
+}
+
+func (l *logConfig) getFields(writer dns.ResponseWriter, req *dns.Msg) logrus.Fields {
+	fields := logrus.Fields{"SRC": writer.RemoteAddr().String()}
+	for _, question := range req.Question {
+		fields["QUESTION"] = question.Name
+		fields["Q_TYPE"] = dns.Type(question.Qtype).String()
+		break
+	}
+	return fields
+}
+
+func (l *logConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
+) func(ctx context.Context, format string, args ...interface{}) {
+	if hitHosts && l.ignoreHosts || hitCache && l.ignoreCache {
+		return utils.CtxDebug
+	}
+	for _, question := range req.Question {
+		if ignore, ok := l.ignoreQTypes[question.Qtype]; ok && ignore {
+			return utils.CtxDebug
+		}
+	}
+	return utils.CtxInfo
+}
+
+func (l *logConfig) exit() error {
+	if l.closer != nil {
+		return l.closer.Close()
 	}
 	return nil
 }
