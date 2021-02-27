@@ -91,8 +91,18 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	cache.ttlMap.Set(cacheKey, entry, ex)
 }
 
-// NewDNSCache 生成一个DNS响应缓存器实例
+// NewDNSCache 生成一个DNS响应缓存器实例。size默认4096，minTTL默认为1分钟，maxTTL默认为24小时。
+// 如果maxTTL为负数且minTTL也为负数，或size为负数，则缓存会立即失效
 func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {
+	if size == 0 {
+		size = 4096
+	}
+	if minTTL == 0 {
+		minTTL = time.Minute
+	}
+	if maxTTL == 0 {
+		maxTTL = time.Hour * 24
+	}
 	c = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
 	c.ttlMap = NewTTLMap(time.Minute)
 	return

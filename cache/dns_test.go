@@ -27,10 +27,19 @@ func TestGetDNSCache(t *testing.T) {
 	request2.Extra = append(request2.Extra, &dns.OPT{Option: []dns.EDNS0{opt}})
 
 	// 缓存立即失效
-	cache := NewDNSCache(1, 0, 0)
+	cache := NewDNSCache(0, -100, -1)
+	cache.Set(request1, resp)
+	assert.True(t, cache.Get(request1) == nil)
+	cache = NewDNSCache(0, -1, -100)
+	cache.Set(request1, resp)
+	assert.True(t, cache.Get(request1) == nil)
+	cache = NewDNSCache(-1, 0, 0)
 	cache.Set(request1, resp)
 	assert.True(t, cache.Get(request1) == nil)
 	// 缓存未立即失效
+	cache = NewDNSCache(0, 0, 0)
+	cache.Set(request1, resp)
+	assert.True(t, cache.Get(request1) != nil)
 	cache = NewDNSCache(1, time.Second, time.Second)
 	cache.Set(request1, resp)
 	assert.True(t, cache.Get(request1) != nil)

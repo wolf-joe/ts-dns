@@ -83,8 +83,8 @@ func TestConf(t *testing.T) {
 	assert.NotEmpty(t, conf.GFWList)
 	assert.NotEmpty(t, conf.CNIP)
 	// 测试GenCache
-	conf.Cache = &Cache{}
-	c := conf.GenCache()
+	conf.Cache = CacheConf{}
+	c := conf.Cache.GenCache()
 	assert.NotNil(t, c)
 	// 测试GenHostsReader
 	conf.Hosts = map[string]string{"host": "1.1.1.1", "ne": "ne"}
@@ -175,7 +175,6 @@ func TestNewHandler(t *testing.T) {
 	handler, err = NewHandler(ctx, "") // GenLogger失败
 	assert.Nil(t, handler)
 	assert.NotNil(t, err)
-	mocker.MethodSeq(&Conf{}, "GenCache", []gomonkey.Params{{nil}, {nil}})
 	mocker.MethodSeq(handler, "IsValid", []gomonkey.Params{{false}, {true}})
 	handler, err = NewHandler(ctx, "") // 验证配置失败
 	assert.Nil(t, handler)

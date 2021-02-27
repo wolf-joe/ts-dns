@@ -96,11 +96,17 @@ func (conf *Group) GenCallers(ctx context.Context) (callers []outbound.Caller) {
 	return
 }
 
-// Cache 配置文件中cache section对应的结构
-type Cache struct {
+// CacheConf 配置文件中cache section对应的结构
+type CacheConf struct {
 	Size   int
 	MinTTL int `toml:"min_ttl"`
 	MaxTTL int `toml:"max_ttl"`
+}
+
+func (conf CacheConf) GenCache() *cache.DNSCache {
+	minTTL := time.Duration(conf.MinTTL) * time.Second
+	maxTTL := time.Duration(conf.MaxTTL) * time.Second
+	return cache.NewDNSCache(conf.Size, minTTL, maxTTL)
 }
 
 // QueryLog 配置文件中query_log section对应的结构
@@ -136,7 +142,7 @@ type Conf struct {
 	Logger        *QueryLog `toml:"query_log"`
 	HostsFiles    []string  `toml:"hosts_files"`
 	Hosts         map[string]string
-	Cache         *Cache
+	Cache         CacheConf
 	Groups        map[string]*Group
 	DisableIPv6   bool     `toml:"disable_ipv6"`
 	DisableQTypes []string `toml:"disable_qtypes"`
@@ -153,22 +159,6 @@ func (conf *Conf) SetDefault() {
 	if conf.CNIP == "" {
 		conf.CNIP = "cnip.txt"
 	}
-}
-
-// GenCache 根据cache section里的配置生成cache实例
-func (conf *Conf) GenCache() *cache.DNSCache {
-	if conf.Cache.Size == 0 {
-		conf.Cache.Size = 4096
-	}
-	if conf.Cache.MinTTL == 0 {
-		conf.Cache.MinTTL = 60
-	}
-	if conf.Cache.MaxTTL == 0 {
-		conf.Cache.MaxTTL = 86400
-	}
-	minTTL := time.Duration(conf.Cache.MinTTL) * time.Second
-	maxTTL := time.Duration(conf.Cache.MaxTTL) * time.Second
-	return cache.NewDNSCache(conf.Cache.Size, minTTL, maxTTL)
 }
 
 // GenHostsReader 读取hosts section里的hosts记录、hosts_files里的hosts文件路径，生成hosts实例列表
@@ -232,7 +222,7 @@ func (conf *Conf) GenGroups(ctx context.Context) (groups map[string]*inbound.Gro
 
 // NewHandler 从toml文件里读取ts-dns的配置并打包为Handler。如err不为空，则在返回前会输出相应错误信息
 func NewHandler(ctx context.Context, filename string) (handler *inbound.Handler, err error) {
-	config := Conf{Cache: &Cache{}, Logger: &QueryLog{}, GFWb64: true}
+	config := Conf{Logger: &QueryLog{}, GFWb64: true}
 	if _, err = toml.DecodeFile(filename, &config); err != nil {
 		utils.CtxError(ctx, "read config %s error: %s", filename, err)
 		return nil, err
@@ -277,7 +267,7 @@ func NewHandler(ctx context.Context, filename string) (handler *inbound.Handler,
 		}
 	}
 	handler.HostsReaders = config.GenHostsReader(ctx)
-	handler.Cache = config.GenCache()
+	handler.Cache = config.Cache.GenCache()
 	// 读取Logger
 	if handler.QLogger, err = config.Logger.GenLogger(); err != nil {
 		utils.CtxError(ctx, "create query logger error: "+err.Error())
