@@ -168,3 +168,71 @@ func TestDNSServer_ServeDNS(t *testing.T) {
 	server.ServeDNS(writer, newReq("BAIDU.COM.", dns.TypeA))
 	assert.NotEmpty(t, writer.Msg.Answer)
 }
+
+type bufCloser struct {
+	buf      []byte
+	closeErr error
+}
+
+func newBufCloser(closeErr error) *bufCloser {
+	return &bufCloser{buf: make([]byte, 0, 4096), closeErr: closeErr}
+}
+func (b *bufCloser) Write(p []byte) (n int, err error) {
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+func (b *bufCloser) Close() error {
+	return b.closeErr
+}
+
+func TestNewLogConfig(t *testing.T) {
+	// region init
+	logrus.SetLevel(logrus.InfoLevel)
+	logBuf := newBufCloser(errors.New("system busy"))
+	logCfg := NewLogConfig(logBuf, []string{"A"}, true, true)
+	writer := utils.NewFakeRespWriter()
+	newReq := func(name string, qType uint16) *dns.Msg {
+		msg := &dns.Msg{Question: []dns.Question{{
+			Name: name, Qtype: qType,
+		}}}
+		msg.Id = uint16(fastrand.Uint32())
+		return msg
+	}
+	ctx := utils.NewCtx(nil, 0xffff)
+	matchAll := matcher.NewABPByText("*")
+	resp := &dns.Msg{Answer: []dns.RR{&dns.A{A: []byte{1, 1, 1, 1}}}}
+	callers := []outbound.Caller{newFakeCaller(0, resp, nil)}
+	groups := map[string]*Group{"all": NewGroup("all", matchAll, callers)}
+	svc := NewDNSServer("", "", groups, logCfg)
+	// endregion
+
+	svc.Hosts = []hosts.Reader{hosts.NewReaderByText("1.2.3.4 baidu.com")}
+	req := newReq("baidu.com", dns.TypeA) // hit hosts
+	writer.Msg = nil
+	logBuf.buf = nil
+	svc.ServeDNS(writer, req)
+	assert.Equal(t, "1.2.3.4", writer.Msg.Answer[0].(*dns.A).A.String())
+	assert.Empty(t, logBuf.buf) // hit hosts, empty log
+
+	req = newReq("ip.cn", dns.TypeA)
+	writer.Msg = nil
+	logBuf.buf = nil
+	svc.ServeDNS(writer, req)
+	assert.Equal(t, "1.1.1.1", writer.Msg.Answer[0].(*dns.A).A.String())
+	assert.Empty(t, logBuf.buf) // ignore qTypes, empty log
+
+	req = newReq("ip.cn", dns.TypeAAAA)
+	writer.Msg = nil
+	logBuf.buf = nil
+	svc.ServeDNS(writer, req)
+	assert.Equal(t, "1.1.1.1", writer.Msg.Answer[0].(*dns.A).A.String())
+	assert.NotEmpty(t, logBuf.buf) // log info
+
+	writer.Msg = nil
+	logBuf.buf = nil
+	svc.ServeDNS(writer, req)
+	assert.Equal(t, "1.1.1.1", writer.Msg.Answer[0].(*dns.A).A.String())
+	assert.Empty(t, logBuf.buf) // hit cache, empty log
+
+	logCfg.exit(ctx)
+}

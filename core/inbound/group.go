@@ -195,7 +195,7 @@ func (g *Group) add2IPSet(ctx context.Context, resp *dns.Msg) {
 	for _, answer := range resp.Answer {
 		if a, ok := answer.(*dns.A); ok {
 			if err := g.IPSet.Add(a.A.String(), g.IPSet.Timeout); err != nil {
-				utils.CtxWarn(ctx, "add %s to ipset %s error: %s", a.A, g.IPSet.Name, err)
+				utils.CtxWarn(ctx, "add %s to ipset<%s> error: %s", a.A, g.IPSet.Name, err)
 			}
 		}
 	}

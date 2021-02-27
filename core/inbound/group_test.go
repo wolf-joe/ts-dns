@@ -156,11 +156,12 @@ func TestGroup2(t *testing.T) {
 	group.IPSet = &ipset.IPSet{}
 	mocker := new(mock.Mocker)
 	defer mocker.Reset()
-	mocker.Method(&ipset.IPSet{}, "Add", func(_ *ipset.IPSet, entry string, _ int) error {
+	mocker.Method(group.IPSet, "Add", func(_ *ipset.IPSet, entry string, _ int) error {
 		if entry == "1.1.1.1" {
 			return nil
 		}
 		return errors.New("err by mock")
 	})
 	_ = group.Handle(ctx, req, nil)
+	time.Sleep(10 * time.Millisecond) // wait ipset goroutine done
 }

@@ -95,9 +95,7 @@ func (s *DNSServer) wait(ctx context.Context, servers []*dns.Server, errCh chan 
 	for _, group := range s.groups {
 		group.Exit()
 	}
-	if err := s.logCfg.exit(); err != nil {
-		utils.CtxWarn(ctx, err.Error())
-	}
+	s.logCfg.exit(ctx)
 	utils.CtxDebug(ctx, "%s is stopped", s)
 	close(s.stopped)
 }
@@ -186,7 +184,7 @@ func NewLogConfig(closer io.WriteCloser, ignoreQTypes []string,
 	logger := logrus.New()
 	logger.SetLevel(logrus.StandardLogger().Level)
 	if closer != nil {
-		logrus.SetOutput(closer)
+		logger.SetOutput(closer)
 	}
 	qTypes := make(map[uint16]bool, len(ignoreQTypes))
 	for _, qTypeStr := range ignoreQTypes {
@@ -229,9 +227,10 @@ func (l *logConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
 	return utils.CtxInfo
 }
 
-func (l *logConfig) exit() error {
+func (l *logConfig) exit(ctx context.Context) {
 	if l.closer != nil {
-		return l.closer.Close()
+		if err := l.closer.Close(); err != nil {
+			utils.CtxWarn(ctx, err.Error())
+		}
 	}
-	return nil
 }
