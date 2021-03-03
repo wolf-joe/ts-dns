@@ -70,6 +70,8 @@ func TestDNSServer(t *testing.T) {
 	server.Run(ctx)
 	time.Sleep(20 * time.Millisecond)
 	server.StopAndWait()
+
+	assert.Equal(t, groups["test"], server.GetGroup("test"))
 }
 
 // 初始化一个一次性caller。首次调用Call时返回指定数据，否则panic

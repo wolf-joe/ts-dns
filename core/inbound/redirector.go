@@ -15,10 +15,10 @@ import (
 type IPRedRule int
 
 const (
-	// IPRedTypeIfFind 如果响应里出现匹配指定范围的ip地址
-	IPRedTypeIfFind IPRedRule = iota
-	// IPRedTypeIfNotFind 如果响应里未出现匹配指定范围的ip地址
-	IPRedTypeIfNotFind
+	// IPRedRuleIfFind 如果响应里出现匹配指定范围的ip地址
+	IPRedRuleIfFind IPRedRule = iota
+	// IPRedRuleIfNotFind 如果响应里未出现匹配指定范围的ip地址
+	IPRedRuleIfNotFind
 )
 
 // IPRedirector 基于DNS响应中IP地址的重定向器
@@ -63,12 +63,12 @@ func (red *IPRedirector) Handle(ctx context.Context, req, resp *dns.Msg) *dns.Ms
 		}
 		if red.ramSet.Contain(ip) {
 			find = true
-			if red.rule == IPRedTypeIfFind {
+			if red.rule == IPRedRuleIfFind {
 				return red.next.Handle(ctx, req, resp)
 			}
 		}
 	}
-	if !find && red.rule == IPRedTypeIfNotFind {
+	if !find && red.rule == IPRedRuleIfNotFind {
 		return red.next.Handle(ctx, req, resp)
 	}
 	return resp

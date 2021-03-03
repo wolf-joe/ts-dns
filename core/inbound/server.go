@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
@@ -16,7 +15,7 @@ import (
 
 // DNSServer 程序主体，负责Hosts/缓存/请求分发
 type DNSServer struct {
-	listen   string           // 监听地址
+	addr     string           // 监听地址
 	network  string           // 监听协议
 	stopSign chan interface{} // 服务停止信号
 	stopped  chan interface{} // 服务是否停止
@@ -24,15 +23,20 @@ type DNSServer struct {
 	disableQTypes map[uint16]bool // 禁用的DNS查询类型
 	Hosts         []hosts.Reader  // Hosts hosts列表
 	Cache         *cache.DNSCache // Cache DNS响应缓存
-	logCfg        *logConfig
+	logCfg        *LogConfig
 
 	groups map[string]*Group
 }
 
 // NewDNSServer 创建一个DNS Server
-func NewDNSServer(listen, network string, groups map[string]*Group, logCfg *logConfig) *DNSServer {
-	dnsCache := cache.NewDNSCache(1024, time.Minute, 24*time.Hour)
-	return &DNSServer{listen: listen, network: network, logCfg: logCfg, groups: groups, Cache: dnsCache}
+func NewDNSServer(addr, network string, groups map[string]*Group, logCfg *LogConfig) *DNSServer {
+	dnsCache := cache.NewDNSCache(cache.DefaultSize, cache.DefaultMinTTL, cache.DefaultMaxTTL)
+	return &DNSServer{addr: addr, network: network, logCfg: logCfg, groups: groups, Cache: dnsCache}
+}
+
+// GetGroup 通过group名称获取group
+func (s *DNSServer) GetGroup(name string) *Group {
+	return s.groups[name]
 }
 
 // SetDisableQTypes 设置禁止查询的类型
@@ -50,7 +54,7 @@ func (s *DNSServer) Run(ctx context.Context) {
 	s.stopSign = make(chan interface{}, 0)
 	s.stopped = make(chan interface{}, 0)
 	errCh := make(chan error, 2)
-	newSrv := func(net string) *dns.Server { return &dns.Server{Addr: s.listen, Net: net, Handler: s} }
+	newSrv := func(net string) *dns.Server { return &dns.Server{Addr: s.addr, Net: net, Handler: s} }
 	servers := make([]*dns.Server, 0, 2)
 	if s.network != "" {
 		servers = append(servers, newSrv(s.network))
@@ -108,7 +112,7 @@ func (s *DNSServer) StopAndWait() {
 
 // String 描述DNS Server
 func (s *DNSServer) String() string {
-	return fmt.Sprintf("DNSServer<%s/%s>", s.listen, s.network)
+	return fmt.Sprintf("DNSServer<%s/%s>", s.addr, s.network)
 }
 
 // ServeDNS 核心函数，处理DNS查询请求
@@ -180,7 +184,7 @@ func (s *DNSServer) tryHosts(ctx context.Context, question dns.Question) *dns.Ms
 
 // NewLogConfig 初始化一个请求日志配置
 func NewLogConfig(closer io.WriteCloser, ignoreQTypes []string,
-	ignoreHosts, ignoreCache bool) *logConfig {
+	ignoreHosts, ignoreCache bool) *LogConfig {
 	logger := logrus.New()
 	logger.SetLevel(logrus.StandardLogger().Level)
 	if closer != nil {
@@ -192,11 +196,12 @@ func NewLogConfig(closer io.WriteCloser, ignoreQTypes []string,
 			qTypes[qType] = true
 		}
 	}
-	return &logConfig{closer: closer, logger: logger, ignoreQTypes: qTypes,
+	return &LogConfig{closer: closer, logger: logger, ignoreQTypes: qTypes,
 		ignoreHosts: ignoreHosts, ignoreCache: ignoreCache}
 }
 
-type logConfig struct {
+// LogConfig DNSServer专用的请求日志配置
+type LogConfig struct {
 	closer       io.WriteCloser
 	logger       *logrus.Logger
 	ignoreQTypes map[uint16]bool
@@ -204,7 +209,7 @@ type logConfig struct {
 	ignoreCache  bool
 }
 
-func (l *logConfig) getFields(writer dns.ResponseWriter, req *dns.Msg) logrus.Fields {
+func (l *LogConfig) getFields(writer dns.ResponseWriter, req *dns.Msg) logrus.Fields {
 	fields := logrus.Fields{"SRC": writer.RemoteAddr().String()}
 	for _, question := range req.Question {
 		fields["QUESTION"] = question.Name
@@ -214,7 +219,7 @@ func (l *logConfig) getFields(writer dns.ResponseWriter, req *dns.Msg) logrus.Fi
 	return fields
 }
 
-func (l *logConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
+func (l *LogConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
 ) func(ctx context.Context, format string, args ...interface{}) {
 	if hitHosts && l.ignoreHosts || hitCache && l.ignoreCache {
 		return utils.CtxDebug
@@ -227,7 +232,7 @@ func (l *logConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
 	return utils.CtxInfo
 }
 
-func (l *logConfig) exit(ctx context.Context) {
+func (l *LogConfig) exit(ctx context.Context) {
 	if l.closer != nil {
 		if err := l.closer.Close(); err != nil {
 			utils.CtxWarn(ctx, err.Error())

@@ -33,10 +33,10 @@ func TestIPSetRedirector(t *testing.T) {
 	ramSet := cache.NewRamSetByText("1.1.1.1")
 	resp := &dns.Msg{}
 
-	redirector := NewIPRedirector(ramSet, IPRedTypeIfFind, nil)
+	redirector := NewIPRedirector(ramSet, IPRedRuleIfFind, nil)
 	assert.Equal(t, resp, redirector.Handle(ctx, nil, resp)) // next not set
 
-	redirector = NewIPRedirector(ramSet, IPRedTypeIfFind, &copyRespHandler{})
+	redirector = NewIPRedirector(ramSet, IPRedRuleIfFind, &copyRespHandler{})
 	assert.Equal(t, resp, redirector.Handle(ctx, nil, resp)) // not find ip match ramSet
 
 	resp.Answer = append(resp.Answer, &dns.A{A: []byte{1, 1, 1, 1}})
@@ -44,7 +44,7 @@ func TestIPSetRedirector(t *testing.T) {
 
 	resp.Answer = []dns.RR{&dns.AAAA{AAAA: []byte{1, 1, 1, 1, 1, 1, 1, 1}}}
 	resp.Answer = append(resp.Answer, &dns.DNAME{})
-	redirector = NewIPRedirector(ramSet, IPRedTypeIfNotFind, &copyRespHandler{})
+	redirector = NewIPRedirector(ramSet, IPRedRuleIfNotFind, &copyRespHandler{})
 	assert.NotEqual(t, resp, redirector.Handle(ctx, nil, resp)) // not find ip, return copy of resp
 
 	// test recursive

@@ -1,12 +1,19 @@
 package cache
 
 import (
-	"github.com/miekg/dns"
-	"github.com/valyala/fastrand"
-	"github.com/wolf-joe/ts-dns/core/common"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
+	"github.com/valyala/fastrand"
+	"github.com/wolf-joe/ts-dns/core/common"
+)
+
+const (
+	DefaultSize   = 4096           // DefaultSize 默认dns缓存大小
+	DefaultMinTTL = time.Minute    // DefaultMinTTL 默认dns缓存最小有效期
+	DefaultMaxTTL = 24 * time.Hour // DefaultMaxTTL 默认dns缓存最大有效期
 )
 
 // DNSCache DNS响应缓存器
@@ -91,18 +98,8 @@ func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
 	cache.ttlMap.Set(cacheKey, entry, ex)
 }
 
-// NewDNSCache 生成一个DNS响应缓存器实例。size默认4096，minTTL默认为1分钟，maxTTL默认为24小时。
-// 如果maxTTL为负数且minTTL也为负数，或size为负数，则缓存会立即失效
+// NewDNSCache 生成一个DNS响应缓存器实例。如果maxTTL为负数且minTTL也为负数，或size为负数，则缓存会立即失效
 func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {
-	if size == 0 {
-		size = 4096
-	}
-	if minTTL == 0 {
-		minTTL = time.Minute
-	}
-	if maxTTL == 0 {
-		maxTTL = time.Hour * 24
-	}
 	c = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
 	c.ttlMap = NewTTLMap(time.Minute)
 	return
