@@ -236,5 +236,5 @@ func TestNewLogConfig(t *testing.T) {
 	assert.Equal(t, "1.1.1.1", writer.Msg.Answer[0].(*dns.A).A.String())
 	assert.Empty(t, logBuf.buf) // hit cache, empty log
 
-	logCfg.exit(ctx)
+	logCfg.Exit(ctx)
 }

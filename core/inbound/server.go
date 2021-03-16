@@ -99,7 +99,7 @@ func (s *DNSServer) wait(ctx context.Context, servers []*dns.Server, errCh chan 
 	for _, group := range s.groups {
 		group.Exit()
 	}
-	s.logCfg.exit(ctx)
+	s.logCfg.Exit(ctx)
 	utils.CtxDebug(ctx, "%s is stopped", s)
 	close(s.stopped)
 }
@@ -232,7 +232,8 @@ func (l *LogConfig) logFunc(req *dns.Msg, hitHosts, hitCache bool,
 	return utils.CtxInfo
 }
 
-func (l *LogConfig) exit(ctx context.Context) {
+// Exit 关闭closer
+func (l *LogConfig) Exit(ctx context.Context) {
 	if l.closer != nil {
 		if err := l.closer.Close(); err != nil {
 			utils.CtxWarn(ctx, err.Error())
