@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -166,6 +167,7 @@ func newCallers(ctx context.Context, socks5 string, dns, dot, doh []string) ([]o
 }
 
 func newGroup(ctx context.Context, name string, conf *Group) (*inbound.Group, error) {
+	priority := 255
 	// 读取域名分组配置
 	rule, err := matcher.NewABPByFile(conf.RulesFile, false)
 	if err != nil {
@@ -173,6 +175,10 @@ func newGroup(ctx context.Context, name string, conf *Group) (*inbound.Group, er
 		return nil, err
 	}
 	rule.Extend(matcher.NewABPByText(strings.Join(conf.Rules, "\n")))
+	if conf.RulesFile == "" && len(conf.RulesFile) == 0 {
+		rule = matcher.NewABPByText("*")
+		priority = math.MaxInt32
+	}
 	// 读取dns服务器配置
 	callers, err := newCallers(ctx, conf.Socks5, conf.DNS, conf.DoT, conf.DoH)
 	if err != nil {
@@ -180,6 +186,7 @@ func newGroup(ctx context.Context, name string, conf *Group) (*inbound.Group, er
 	}
 	// 读取group配置
 	group := inbound.NewGroup(name, rule, callers)
+	group.Priority = priority
 	group.IPSet, err = newIPSet(ctx, conf.IPSet, conf.IPSetTTL)
 	if err != nil {
 		return nil, err

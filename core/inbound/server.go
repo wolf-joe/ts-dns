@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -25,13 +26,27 @@ type DNSServer struct {
 	Cache         *cache.DNSCache // Cache DNS响应缓存
 	logCfg        *LogConfig
 
+	names  []string
 	groups map[string]*Group
 }
 
 // NewDNSServer 创建一个DNS Server
 func NewDNSServer(addr, network string, groups map[string]*Group, logCfg *LogConfig) *DNSServer {
 	dnsCache := cache.NewDNSCache(cache.DefaultSize, cache.DefaultMinTTL, cache.DefaultMaxTTL)
-	return &DNSServer{addr: addr, network: network, logCfg: logCfg, groups: groups, Cache: dnsCache}
+	names := make([]string, 0, len(groups))
+	for name := range groups {
+		names = append(names, name)
+	}
+	// 按优先级排序
+	sort.Slice(names, func(i, j int) bool {
+		gi, gj := groups[names[i]], groups[names[j]]
+		if gi.Priority != gj.Priority {
+			return gi.Priority < gi.Priority
+		}
+		return gi.name < gj.name
+	})
+	return &DNSServer{addr: addr, network: network, logCfg: logCfg,
+		Cache: dnsCache, names: names, groups: groups}
 }
 
 // GetGroup 通过group名称获取group
@@ -150,7 +165,8 @@ func (s *DNSServer) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
 	}
 	defer func() { s.Cache.Set(req, resp) }() // 将结果加入缓存
 
-	for _, group := range s.groups {
+	for _, name := range s.names {
+		group := s.groups[name]
 		if match, ok := group.matcher.Match(question.Name); ok && match {
 			resp = group.Handle(ctx, req, nil)
 			break

@@ -15,8 +15,9 @@ import (
 
 // Group 域名解析组，负责将DNS请求转发至上游DNS
 type Group struct {
-	name    string
-	matcher matcher.DomainMatcher // 域名匹配规则
+	name     string
+	Priority int                   // Priority 匹配优先级
+	matcher  matcher.DomainMatcher // 域名匹配规则
 
 	NoCookie bool              // NoCookie 是否删除请求中的cookie
 	WithECS  *dns.EDNS0_SUBNET // WithECS 是否在请求中附加ECS信息

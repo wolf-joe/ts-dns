@@ -71,6 +71,16 @@ func TestDNSServer(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	server.StopAndWait()
 
+	utils.CtxInfo(ctx, "---- test priority ----")
+	groups = map[string]*Group{"test": NewGroup("test", allM, []outbound.Caller{cErr}),
+		"test2": NewGroup("test2", allM, []outbound.Caller{cErr})}
+	server = NewDNSServer("127.0.0.1:5353", "udp", groups, logCfg)
+	assert.Equal(t, []string{"test", "test2"}, server.names)
+	groups["test"].Priority = 100
+	groups["test2"].Priority = 0
+	server = NewDNSServer("127.0.0.1:5353", "udp", groups, logCfg)
+	assert.Equal(t, []string{"test2", "test"}, server.names)
+
 	assert.Equal(t, groups["test"], server.GetGroup("test"))
 }
 
