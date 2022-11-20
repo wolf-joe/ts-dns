@@ -12,8 +12,10 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/janeczku/go-ipset v0.0.0-20170206212442-499ed3217c4b
 	github.com/miekg/dns v1.1.32
+	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/sparrc/go-ping v0.0.0-20190613174326-4e5b6552494c
-	github.com/stretchr/testify v1.2.2
+	github.com/stretchr/testify v1.7.0
 	github.com/valyala/fastrand v1.0.0
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
