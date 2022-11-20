@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"github.com/wolf-joe/ts-dns/config"
 	"net"
@@ -111,6 +112,7 @@ func (h *HostReader) ReloadConfig(conf *config.Conf) error {
 		}
 	}()
 	for _, filename := range conf.HostsFiles {
+		logrus.Debugf("load hosts file %q", filename)
 		file, err := os.Open(filename)
 		if err != nil {
 			return fmt.Errorf("load hosts file %q error: %w", filename, err)

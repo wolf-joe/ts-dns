@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/config"
@@ -8,6 +9,7 @@ import (
 )
 
 func TestNewHostReader(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	cfg := &config.Conf{Hosts: map[string]string{
 		"z.cn": "1.1.1.1",
 	}, HostsFiles: []string{
@@ -65,4 +67,30 @@ func TestNewHostReader(t *testing.T) {
 	r, err = NewHostReader(cfg)
 	t.Logf("%+v", err)
 	assert.NotNil(t, err)
+}
+
+func BenchmarkHostReader_Regexp(b *testing.B) {
+	r, err := NewHostReader(&config.Conf{Hosts: map[string]string{
+		"z.cn":    "1.1.1.1",
+		"*.wd.cn": "1.1.1.1",
+	}})
+	assert.Nil(b, err)
+	for i := 0; i < b.N; i++ {
+		rr, err := r.Record("test.wd.cn", dns.TypeA)
+		assert.NotNil(b, rr)
+		assert.Nil(b, err)
+	}
+}
+
+func BenchmarkHostReader_Domain(b *testing.B) {
+	r, err := NewHostReader(&config.Conf{Hosts: map[string]string{
+		"z.cn":    "1.1.1.1",
+		"*.wd.cn": "1.1.1.1",
+	}})
+	assert.Nil(b, err)
+	for i := 0; i < b.N; i++ {
+		rr, err := r.Record("z.cn", dns.TypeA)
+		assert.NotNil(b, rr)
+		assert.Nil(b, err)
+	}
 }

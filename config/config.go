@@ -8,8 +8,15 @@ type Conf struct {
 	//Logger        *QueryLog `toml:"query_log"`
 	HostsFiles []string `toml:"hosts_files"`
 	Hosts      map[string]string
-	//Cache         CacheConf
+	Cache      CacheConf
 	//Groups        map[string]*Group
 	DisableIPv6   bool     `toml:"disable_ipv6"`
 	DisableQTypes []string `toml:"disable_qtypes"`
+}
+
+// CacheConf 配置文件中cache section对应的结构
+type CacheConf struct {
+	Size   int
+	MinTTL int `toml:"min_ttl"`
+	MaxTTL int `toml:"max_ttl"`
 }
