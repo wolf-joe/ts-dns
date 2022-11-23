@@ -2,7 +2,6 @@ package hosts
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
@@ -11,77 +10,22 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync/atomic"
 	"unicode"
 )
 
-var (
-	ErrUnknownQueryType = errors.New("unknown query type")
-	ErrInvalidIP        = errors.New("invalid IP addr")
-	zeroIP              = ipInfo{}
-)
+// region interface
 
-type ipInfo struct {
-	val string
-	dt  uint16
+type IDNSHosts interface {
+	Get(req *dns.Msg) *dns.Msg
 }
 
-func (i ipInfo) Record(host string) string {
-	if i.dt == dns.TypeA {
-		return host + " 0 IN A " + i.val
-	}
-	return host + " 0 IN AAAA " + i.val
-}
-
-func buildIPInfo(val string) (ipInfo, error) {
-	ip := net.ParseIP(val)
-	if ip.To4() != nil {
-		return ipInfo{val: val, dt: dns.TypeA}, nil
-	} else if ip.To16() != nil {
-		return ipInfo{val: val, dt: dns.TypeAAAA}, nil
-	}
-	return zeroIP, ErrInvalidIP
-}
-
-// HostReader 管理hosts
-type HostReader struct {
-	domainMap *atomic.Value // type: map[string]ipInfo
-	regexMap  *atomic.Value // type: map[*regexp.Regexp]ipInfo
-}
-
-func (h *HostReader) getIP(host string) (ipInfo, bool) {
-	if res, exists := h.domainMap.Load().(map[string]ipInfo)[host]; exists {
-		return res, true
-	}
-	for reg, res := range h.regexMap.Load().(map[*regexp.Regexp]ipInfo) {
-		if reg.MatchString(host) {
-			return res, true
-		}
-	}
-	return zeroIP, false
-}
-
-func (h *HostReader) Record(host string, query uint16) (dns.RR, error) {
-	if query != dns.TypeA && query != dns.TypeAAAA {
-		return nil, ErrUnknownQueryType
-	}
-	ip, exists := h.getIP(host)
-	if !exists && strings.HasSuffix(host, ".") {
-		ip, exists = h.getIP(host[:len(host)-1])
-	}
-	if !exists || ip.dt != query {
-		return nil, nil
-	}
-	return dns.NewRR(ip.Record(host))
-}
-
-func (h *HostReader) ReloadConfig(conf *config.Conf) error {
+func NewDNSHosts(conf *config.Conf) (IDNSHosts, error) {
 	domainMap := make(map[string]ipInfo, len(conf.Hosts))
 	regexMap := make(map[*regexp.Regexp]ipInfo, len(conf.Hosts))
 	load := func(host, ipStr string) error {
-		ip, err := buildIPInfo(ipStr)
-		if err != nil {
-			return fmt.Errorf("parse %q to host failed: %w", ipStr, err)
+		ip := buildIPInfo(ipStr)
+		if ip == zeroIP {
+			return fmt.Errorf("parse %q to ip failed", ipStr)
 		}
 		if !strings.ContainsAny(host, "*?") {
 			domainMap[host] = ip
@@ -101,7 +45,7 @@ func (h *HostReader) ReloadConfig(conf *config.Conf) error {
 	// parse hosts
 	for host, ipStr := range conf.Hosts {
 		if err := load(host, ipStr); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	// parse hosts files
@@ -115,37 +59,103 @@ func (h *HostReader) ReloadConfig(conf *config.Conf) error {
 		logrus.Debugf("load hosts file %q", filename)
 		file, err := os.Open(filename)
 		if err != nil {
-			return fmt.Errorf("load hosts file %q error: %w", filename, err)
+			return nil, fmt.Errorf("load hosts file %q error: %w", filename, err)
 		}
 		files = append(files, file)
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
+			// parse each line
 			line := strings.TrimSpace(scanner.Text())
 			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
-				continue
+				continue // ignore comment
 			}
 			parts := strings.FieldsFunc(line, unicode.IsSpace)
 			if len(parts) < 2 {
 				continue
 			}
 			if err = load(parts[0], parts[1]); err != nil {
-				return fmt.Errorf("load hosts file %q error: %w", filename, err)
+				return nil, fmt.Errorf("load hosts file %q error: %w", filename, err)
 			}
 		}
 	}
-	// reload
-	h.domainMap.Store(domainMap)
-	h.regexMap.Store(regexMap)
-	return nil
+	return &HostReader{
+		domainMap: domainMap,
+		regexMap:  regexMap,
+	}, nil
 }
 
-func NewHostReader(conf *config.Conf) (*HostReader, error) {
-	r := &HostReader{
-		domainMap: new(atomic.Value),
-		regexMap:  new(atomic.Value),
-	}
-	if err := r.ReloadConfig(conf); err != nil {
-		return nil, err
-	}
-	return r, nil
+// endregion
+
+// region impl
+var (
+	zeroIP           = ipInfo{}
+	_      IDNSHosts = &HostReader{}
+)
+
+type ipInfo struct {
+	val   string
+	_type uint16
 }
+
+func (i ipInfo) Record(host string) string {
+	if i._type == dns.TypeA {
+		return host + " 0 IN A " + i.val
+	}
+	return host + " 0 IN AAAA " + i.val
+}
+
+func buildIPInfo(val string) ipInfo {
+	ip := net.ParseIP(val)
+	if ip.To4() != nil {
+		return ipInfo{val: val, _type: dns.TypeA}
+	} else if ip.To16() != nil {
+		return ipInfo{val: val, _type: dns.TypeAAAA}
+	}
+	return zeroIP
+}
+
+// HostReader 管理hosts
+type HostReader struct {
+	domainMap map[string]ipInfo
+	regexMap  map[*regexp.Regexp]ipInfo
+}
+
+func (h *HostReader) Get(req *dns.Msg) *dns.Msg {
+	if len(req.Question) == 0 {
+		return nil
+	}
+	host, qType := req.Question[0].Name, req.Question[0].Qtype
+	if qType != dns.TypeA && qType != dns.TypeAAAA {
+		return nil
+	}
+
+	getIP := func(host string) (ipInfo, bool) {
+		if res, exists := h.domainMap[host]; exists {
+			return res, true
+		}
+		for reg, res := range h.regexMap {
+			if reg.MatchString(host) {
+				return res, true
+			}
+		}
+		return zeroIP, false
+	}
+	ip, exists := getIP(host)
+	if !exists && strings.HasSuffix(host, ".") {
+		ip, exists = getIP(host[:len(host)-1])
+	}
+	if !exists || ip._type != qType {
+		return nil
+	}
+	rr, err := dns.NewRR(ip.Record(host))
+	if err != nil {
+		logrus.Errorf("build dns rr failed: %+v", err)
+		return nil
+	}
+	resp := new(dns.Msg)
+	resp.SetReply(req)
+	resp.Answer = append(resp.Answer, rr)
+	return resp
+}
+
+// endregion

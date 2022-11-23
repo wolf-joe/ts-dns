@@ -9,55 +9,22 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
+// IDNSCache cache dns response for dns request
 type IDNSCache interface {
+	// Get find cached response
 	Get(req *dns.Msg) *dns.Msg
+	// Set save response to cache
 	Set(req *dns.Msg, resp *dns.Msg)
-	ReloadConfig(conf *config.Conf) error
+	// Start life cycle begin
+	Start(cleanTick time.Duration)
+	// Stop life cycle end
+	Stop()
 }
 
 func NewDNSCache2(conf *config.Conf) (IDNSCache, error) {
-	c := &cacheWrapper{}
-	if err := c.ReloadConfig(conf); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-var (
-	_ IDNSCache = &cacheWrapper{}
-)
-
-type cacheWrapper struct {
-	ptr unsafe.Pointer
-}
-
-func (w *cacheWrapper) Get(req *dns.Msg) *dns.Msg {
-	return (*dnsCache)(atomic.LoadPointer(&w.ptr)).Get(req)
-}
-
-func (w *cacheWrapper) Set(req *dns.Msg, resp *dns.Msg) {
-	(*dnsCache)(atomic.LoadPointer(&w.ptr)).Set(req, resp)
-}
-
-func (w *cacheWrapper) ReloadConfig(conf *config.Conf) error {
-	if w.ptr != nil {
-		(*dnsCache)(atomic.LoadPointer(&w.ptr)).stop()
-	}
-	c, err := newDNSCache(conf)
-	if err != nil {
-		return fmt.Errorf("build dns cache error: %w", err)
-	}
-	c.start(time.Minute)
-	atomic.StorePointer(&w.ptr, unsafe.Pointer(c))
-	return nil
-}
-
-func newDNSCache(conf *config.Conf) (*dnsCache, error) {
 	minTTL, maxTTL, maxSize := DefaultMinTTL, DefaultMaxTTL, DefaultSize
 	if conf.Cache.MinTTL > 0 {
 		minTTL = time.Second * time.Duration(conf.Cache.MinTTL)
@@ -73,6 +40,7 @@ func newDNSCache(conf *config.Conf) (*dnsCache, error) {
 		items:   map[string]cacheItem{},
 		lock:    new(sync.RWMutex),
 		stopCh:  make(chan struct{}),
+		stopped: make(chan struct{}),
 		maxSize: maxSize,
 		minTTL:  minTTL,
 		maxTTL:  maxTTL,
@@ -80,15 +48,20 @@ func newDNSCache(conf *config.Conf) (*dnsCache, error) {
 	return c, nil
 }
 
+var (
+	_ IDNSCache = &dnsCache{}
+)
+
 type cacheItem struct {
 	resp      *dns.Msg
 	expiredAt int64
 }
 
 type dnsCache struct {
-	items  map[string]cacheItem
-	lock   *sync.RWMutex
-	stopCh chan struct{}
+	items   map[string]cacheItem
+	lock    *sync.RWMutex
+	stopCh  chan struct{}
+	stopped chan struct{}
 
 	maxSize int
 	minTTL  time.Duration
@@ -177,13 +150,14 @@ func (c *dnsCache) Set(req *dns.Msg, resp *dns.Msg) {
 	c.lock.Unlock()
 }
 
-func (c *dnsCache) start(cleanTick time.Duration) {
+func (c *dnsCache) Start(cleanTick time.Duration) {
 	go func() {
 		tk := time.Tick(cleanTick)
 		for {
 			select {
 			case <-c.stopCh:
-				break
+				close(c.stopped)
+				return
 			case <-tk:
 				// clean expired key
 				c.lock.Lock()
@@ -198,6 +172,11 @@ func (c *dnsCache) start(cleanTick time.Duration) {
 	}()
 }
 
-func (c *dnsCache) stop() {
-	close(c.stopCh)
+func (c *dnsCache) Stop() {
+	select {
+	case <-c.stopCh:
+	default:
+		close(c.stopCh)
+	}
+	<-c.stopped
 }

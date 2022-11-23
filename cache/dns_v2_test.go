@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/config"
 	"testing"
+	"time"
 )
 
 func TestNewDNSCache(t *testing.T) {
@@ -23,13 +24,20 @@ func TestNewDNSCache(t *testing.T) {
 	c.Set(req, resp)
 	assert.Nil(t, c.Get(req))
 
-	err = c.ReloadConfig(&config.Conf{Cache: config.CacheConf{
-		Size: 1024, MinTTL: 60, MaxTTL: 3600,
+	c, err = NewDNSCache2(&config.Conf{Cache: config.CacheConf{
+		Size: 1024, MinTTL: 1, MaxTTL: 3600,
 	}})
 	assert.Nil(t, err)
+
+	c.Start(time.Second)
+	defer c.Stop()
 	c.Set(req, resp)
 	assert.NotNil(t, c.Get(req))
 	t.Log(c.Get(req))
+	// expired
+	time.Sleep(time.Second * 2)
+	assert.Nil(t, c.Get(req))
+	c.Stop() // try call multiple times Stop()
 }
 
 func BenchmarkNewDNSCache(b *testing.B) {
