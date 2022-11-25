@@ -173,10 +173,6 @@ func (c *dnsCache) Start(cleanTick time.Duration) {
 }
 
 func (c *dnsCache) Stop() {
-	select {
-	case <-c.stopCh:
-	default:
-		close(c.stopCh)
-	}
+	close(c.stopCh)
 	<-c.stopped
 }

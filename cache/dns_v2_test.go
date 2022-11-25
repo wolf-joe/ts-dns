@@ -37,7 +37,6 @@ func TestNewDNSCache(t *testing.T) {
 	// expired
 	time.Sleep(time.Second * 2)
 	assert.Nil(t, c.Get(req))
-	c.Stop() // try call multiple times Stop()
 }
 
 func BenchmarkNewDNSCache(b *testing.B) {

@@ -7,9 +7,12 @@ import (
 	"strings"
 )
 
+var (
+	_ DomainMatcher = &ABPlus{}
+)
+
 // ABPlus 基于部分AdBlock Plus规则的域名匹配器
 type ABPlus struct {
-	DomainMatcher
 	isBlocked     map[string]bool
 	blockedRegs   []*regexp.Regexp
 	unblockedRegs []*regexp.Regexp
