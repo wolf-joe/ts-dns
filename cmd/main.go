@@ -97,6 +97,7 @@ func reloadConf(ch chan os.Signal, filename *string, handler core.IHandler) {
 			}
 			if err := handler.ReloadConfig(conf); err != nil {
 				logrus.Warnf("reload config failed: %+v", err)
+				return
 			}
 			logrus.Infof("reload config success")
 		}

@@ -47,20 +47,23 @@ type handlerWrapper struct {
 
 func (w *handlerWrapper) ReloadConfig(conf *config.Conf) error {
 	// create & start new handler
+	logrus.Debugf("begin reload config")
 	h, err := newHandle(conf)
 	if err != nil {
 		return fmt.Errorf("make new handler failed: %w", err)
 	}
 	h.start()
-	// stop old handler
-	old := atomic.LoadPointer(&w.handlerPtr)
-	if old != nil {
-		(*handlerImpl)(old).stop()
-	}
+	logrus.Debugf("reload config: new handler started")
 	// swap handler
-	if !atomic.CompareAndSwapPointer(&w.handlerPtr, old, unsafe.Pointer(h)) {
-		h.stop()
-		return fmt.Errorf("CAS failed when swap handler")
+	for {
+		old := atomic.LoadPointer(&w.handlerPtr)
+		if atomic.CompareAndSwapPointer(&w.handlerPtr, old, unsafe.Pointer(h)) {
+			if old != nil {
+				(*handlerImpl)(old).stop()
+				logrus.Debugf("reload config: old handler stopped")
+			}
+			break
+		}
 	}
 	return nil
 }
@@ -199,7 +202,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 		if _info.blocked || _info.hitCache || _info.hitHosts {
 			logrus.WithFields(fields).Debug()
 		} else {
-			logrus.WithFields(fields).Info("")
+			logrus.WithFields(fields).Info()
 		}
 	}()
 	// endregion
@@ -257,10 +260,12 @@ func (h *handlerImpl) start() {
 }
 
 func (h *handlerImpl) stop() {
+	logrus.Debugf("stop handler")
 	for _, group := range h.groups {
 		group.Stop()
 	}
 	h.cache.Stop()
+	logrus.Debugf("stop handler success")
 }
 
 // endregion

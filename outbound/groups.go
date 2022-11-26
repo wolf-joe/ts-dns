@@ -363,6 +363,9 @@ func (g *groupImpl) PostProcess(_ *dns.Msg, resp *dns.Msg) {
 }
 
 func (g *groupImpl) grabGFWList() *matcher.ABPlus {
+	if g.gfwListURL == "" {
+		return nil
+	}
 	client := new(http.Client)
 	client.Timeout = 10 * time.Second
 	if g.proxy != nil {
@@ -400,35 +403,35 @@ func (g *groupImpl) Start(resolver dns.Handler) {
 	for _, caller := range g.callers {
 		caller.Start(resolver)
 	}
-	if g.gfwListURL != "" {
-		lastSuccess := time.Unix(0, 0)
-		tick := time.NewTicker(time.Minute)
-		go func() {
-			for {
-				select {
-				case <-tick.C:
-					if time.Now().Sub(lastSuccess).Hours() < 1 {
-						// every hour
-						continue
-					}
-					if m := g.grabGFWList(); m != nil {
-						atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
-						lastSuccess = time.Now()
-					}
-				case <-g.stopCh:
-					close(g.stopped)
-					tick.Stop()
-					return
+	lastSuccess := time.Unix(0, 0)
+	tick := time.NewTicker(time.Minute)
+	go func() {
+		for {
+			select {
+			case <-tick.C:
+				if time.Now().Sub(lastSuccess).Hours() < 1 {
+					// every hour
+					continue
 				}
+				if m := g.grabGFWList(); m != nil {
+					atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
+					lastSuccess = time.Now()
+				}
+			case <-g.stopCh:
+				close(g.stopped)
+				tick.Stop()
+				return
 			}
-		}()
-	}
+		}
+	}()
 }
 
 func (g *groupImpl) Stop() {
+	logrus.Debugf("stop group %s", g)
 	for _, caller := range g.callers {
 		caller.Exit()
 	}
 	close(g.stopCh)
 	<-g.stopped
+	logrus.Debugf("stop group %s success", g)
 }

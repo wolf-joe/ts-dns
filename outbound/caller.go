@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -245,7 +246,9 @@ func (caller *DoHCallerV2) Call(request *dns.Msg) (r *dns.Msg, err error) {
 
 // Exit 停止后台goroutine。caller退出时行为
 func (caller *DoHCallerV2) Exit() {
+	logrus.Debugf("stop caller %s", caller)
 	caller.cancelCh <- struct{}{}
+	logrus.Debugf("stop caller %s success", caller)
 }
 
 // String 描述caller

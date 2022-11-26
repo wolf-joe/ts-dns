@@ -103,6 +103,7 @@ func (c *dnsCache) Get(req *dns.Msg) *dns.Msg {
 		return nil
 	}
 	r := item.resp.Copy()
+	r.SetReply(req)
 	for i := 0; i < len(r.Answer); i++ {
 		r.Answer[i].Header().Ttl = uint32(ttl)
 	}
