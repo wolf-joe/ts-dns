@@ -110,7 +110,7 @@ func newHandle(conf *config.Conf) (*handlerImpl, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build hosts failed: %w", err)
 	}
-	h.cache, err = cache.NewDNSCache2(conf)
+	h.cache, err = cache.NewDNSCache(conf)
 	if err != nil {
 		return nil, fmt.Errorf("build cache failed: %w", err)
 	}
@@ -251,7 +251,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 
 func (h *handlerImpl) start() {
 	for _, group := range h.groups {
-		group.Start()
+		group.Start(h)
 	}
 	h.cache.Start(time.Minute)
 }

@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	DefaultMinTTL = time.Minute    // DefaultMinTTL 默认dns缓存最小有效期
+	DefaultMaxTTL = 24 * time.Hour // DefaultMaxTTL 默认dns缓存最大有效期
+)
+
 // IDNSCache cache dns response for dns request
 type IDNSCache interface {
 	// Get find cached response
@@ -24,8 +29,8 @@ type IDNSCache interface {
 	Stop()
 }
 
-func NewDNSCache2(conf *config.Conf) (IDNSCache, error) {
-	minTTL, maxTTL, maxSize := DefaultMinTTL, DefaultMaxTTL, DefaultSize
+func NewDNSCache(conf *config.Conf) (IDNSCache, error) {
+	minTTL, maxTTL := DefaultMinTTL, DefaultMaxTTL
 	if conf.Cache.MinTTL > 0 {
 		minTTL = time.Second * time.Duration(conf.Cache.MinTTL)
 	}
@@ -35,13 +40,12 @@ func NewDNSCache2(conf *config.Conf) (IDNSCache, error) {
 	if minTTL > maxTTL {
 		return nil, fmt.Errorf("min ttl(%d) larger than max ttl(%d)", conf.Cache.MinTTL, conf.Cache.MaxTTL)
 	}
-	maxSize = conf.Cache.Size
 	c := &dnsCache{
 		items:   map[string]cacheItem{},
 		lock:    new(sync.RWMutex),
 		stopCh:  make(chan struct{}),
 		stopped: make(chan struct{}),
-		maxSize: maxSize,
+		maxSize: conf.Cache.Size,
 		minTTL:  minTTL,
 		maxTTL:  maxTTL,
 	}

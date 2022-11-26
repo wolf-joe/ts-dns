@@ -23,7 +23,7 @@ import (
 // Caller 上游DNS请求基类
 type Caller interface {
 	Call(request *dns.Msg) (r *dns.Msg, err error)
-	Start()
+	Start(resolver dns.Handler)
 	Exit()
 	String() string
 }
@@ -41,7 +41,7 @@ type DNSCaller struct {
 	conn   *dns.Conn
 }
 
-func (caller *DNSCaller) Start() {}
+func (caller *DNSCaller) Start(_ dns.Handler) {}
 
 // Call 向目标上游DNS转发请求
 func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
@@ -102,16 +102,17 @@ type DoHCallerV2 struct {
 	cancelCh  chan interface{} // stop run()
 }
 
-func (caller *DoHCallerV2) Start() {
-	// todo fix memory leak
-	go caller.run(time.Tick(time.Hour*24), time.Second)
+func (caller *DoHCallerV2) Start(resolver dns.Handler) {
+	caller.resolver = resolver
+	go caller.run(time.Hour*24, time.Second)
 }
 
 // 后台goroutine，负责定时/按需解析DoH服务器域名
-func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
+func (caller *DoHCallerV2) run(resolveCycle time.Duration, timeout time.Duration) {
+	tick := time.NewTicker(resolveCycle)
 	for {
 		select {
-		case <-tick:
+		case <-tick.C:
 			caller.rwMux.Lock()
 			caller.resolve(nil, timeout)
 			caller.rwMux.Unlock()
@@ -123,6 +124,7 @@ func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
 			caller.rwMux.Unlock()
 			caller.satisfyCh <- struct{}{} // 通知getClient()
 		case <-caller.cancelCh:
+			tick.Stop()
 			return
 		}
 	}

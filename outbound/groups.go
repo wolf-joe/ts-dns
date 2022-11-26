@@ -27,7 +27,7 @@ type IGroup interface {
 	IsFallback() bool
 	Handle(req *dns.Msg) *dns.Msg
 	PostProcess(req *dns.Msg, resp *dns.Msg)
-	Start()
+	Start(resolver dns.Handler)
 	Stop()
 	String() string
 }
@@ -396,9 +396,9 @@ func (g *groupImpl) grabGFWList() *matcher.ABPlus {
 	return matcher.NewABPByText(string(dst))
 }
 
-func (g *groupImpl) Start() {
+func (g *groupImpl) Start(resolver dns.Handler) {
 	for _, caller := range g.callers {
-		caller.Start()
+		caller.Start(resolver)
 	}
 	if g.gfwListURL != "" {
 		lastSuccess := time.Unix(0, 0)

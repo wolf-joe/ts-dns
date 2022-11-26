@@ -11,7 +11,7 @@ import (
 func TestNewDNSCache(t *testing.T) {
 	req := new(dns.Msg)
 	req.SetQuestion("z.cn.", dns.TypeA)
-	c, err := NewDNSCache2(&config.Conf{Cache: config.CacheConf{
+	c, err := NewDNSCache(&config.Conf{Cache: config.CacheConf{
 		Size: 0, MinTTL: 0, MaxTTL: 0,
 	}})
 	assert.Nil(t, err)
@@ -24,7 +24,7 @@ func TestNewDNSCache(t *testing.T) {
 	c.Set(req, resp)
 	assert.Nil(t, c.Get(req))
 
-	c, err = NewDNSCache2(&config.Conf{Cache: config.CacheConf{
+	c, err = NewDNSCache(&config.Conf{Cache: config.CacheConf{
 		Size: 1024, MinTTL: 1, MaxTTL: 3600,
 	}})
 	assert.Nil(t, err)
@@ -42,7 +42,7 @@ func TestNewDNSCache(t *testing.T) {
 func BenchmarkNewDNSCache(b *testing.B) {
 	req := new(dns.Msg)
 	req.SetQuestion("z.cn.", dns.TypeA)
-	c, err := NewDNSCache2(&config.Conf{Cache: config.CacheConf{
+	c, err := NewDNSCache(&config.Conf{Cache: config.CacheConf{
 		Size: 1024, MinTTL: 60, MaxTTL: 3600,
 	}})
 	assert.Nil(b, err)
