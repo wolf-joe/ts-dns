@@ -124,7 +124,8 @@ func (h *HostReader) Get(req *dns.Msg) *dns.Msg {
 	if len(req.Question) == 0 {
 		return nil
 	}
-	host, qType := req.Question[0].Name, req.Question[0].Qtype
+	// todo dns大小写不敏感
+	host, qType := strings.ToLower(req.Question[0].Name), req.Question[0].Qtype
 	if qType != dns.TypeA && qType != dns.TypeAAAA {
 		return nil
 	}

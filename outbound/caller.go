@@ -133,7 +133,6 @@ func (caller *DoHCallerV2) run(resolveCycle time.Duration, timeout time.Duration
 
 // 使用resolver，将host解析成ipv4并生成clients
 func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
-	// todo 自闭环dns请求
 	genClient := func(ip string) *http.Client {
 		return &http.Client{Transport: &http.Transport{
 			DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
@@ -142,7 +141,7 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 			},
 		}}
 	}
-	name := strings.ToUpper(caller.host + ".")
+	name := caller.host + "."
 	if srcReq != nil && len(srcReq.Question) > 0 && srcReq.Question[0].Name == name {
 		// todo log
 		//utils.CtxError(caller.ctx, "%s resolve recursive", caller)

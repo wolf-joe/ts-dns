@@ -93,11 +93,11 @@ func reloadConf(ch chan os.Signal, filename *string, handler core.IHandler) {
 			conf := new(config.Conf)
 			if _, err := toml.DecodeFile(*filename, conf); err != nil {
 				logrus.Warnf("load config file %q failed: %+v", *filename, err)
-				return
+				continue
 			}
 			if err := handler.ReloadConfig(conf); err != nil {
 				logrus.Warnf("reload config failed: %+v", err)
-				return
+				continue
 			}
 			logrus.Infof("reload config success")
 		}
