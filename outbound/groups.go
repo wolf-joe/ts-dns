@@ -89,7 +89,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 				if err != nil {
 					return nil, fmt.Errorf("build gfw list failed: %w", err)
 				}
-				g.gfwList = unsafe.Pointer(m)
+				atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
 			}
 			g.gfwListURL = gfwConf.URL
 		}

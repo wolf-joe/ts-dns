@@ -41,7 +41,7 @@ func FastestPingIP(ipAddr []string, tcpPort int, timeout time.Duration,
 	begin := time.Now()
 	for _, ip := range ipAddr {
 		go func(addr string) {
-			if err := PingIP(addr, tcpPort, timeout); err != nil {
+			if err := PingIP(addr, tcpPort, timeout); err == nil {
 				pingDone <- addr
 			}
 		}(ip)

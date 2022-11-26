@@ -44,6 +44,7 @@ func TestFastestPingIP(t *testing.T) {
 	target := &net.TCPConn{}
 	mocker.Method(target, "Close", func(*net.TCPConn) error { return nil })
 	mocker.Func(net.DialTimeout, func(_, addr string, _ time.Duration) (net.Conn, error) {
+		fmt.Println(addr)
 		if addr == fmt.Sprintf("%s:%d", "1.1.1.1", port) {
 			return &net.TCPConn{}, nil
 		}
