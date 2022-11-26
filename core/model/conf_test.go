@@ -8,8 +8,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/agiledragon/gomonkey"
-	"github.com/janeczku/go-ipset/ipset"
 	"github.com/stretchr/testify/assert"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/utils/mock"
 	"github.com/wolf-joe/ts-dns/hosts"

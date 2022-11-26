@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"errors"
 	"net"
 	"strconv"
@@ -36,15 +35,13 @@ func PingIP(ipAddr string, tcpPort int, timeout time.Duration) error {
 }
 
 // FastestPingIP 向指定IP地址列表同时发起ping，返回ping值最低的IP地址和耗时
-func FastestPingIP(ctx context.Context, ipAddr []string, tcpPort int, timeout time.Duration,
+func FastestPingIP(ipAddr []string, tcpPort int, timeout time.Duration,
 ) (string, int64, error) {
 	pingDone := make(chan string, len(ipAddr))
 	begin := time.Now()
 	for _, ip := range ipAddr {
 		go func(addr string) {
 			if err := PingIP(addr, tcpPort, timeout); err != nil {
-				CtxDebug(ctx, "ping %s:%d error: %s", addr, tcpPort, err)
-			} else {
 				pingDone <- addr
 			}
 		}(ip)

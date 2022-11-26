@@ -83,3 +83,11 @@ func TestABPlus_Extend(t *testing.T) {
 	assert.True(t, matched)
 	assert.True(t, ok)
 }
+
+func TestNewABPByFile(t *testing.T) {
+	matcher, err := NewABPByFile("testdata/gfwlist.txt", true)
+	assert.Nil(t, err)
+	matched, ok := matcher.Match("google.com")
+	assert.True(t, ok)
+	assert.True(t, matched)
+}

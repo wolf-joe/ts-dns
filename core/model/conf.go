@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Sirupsen/logrus"
-	"github.com/janeczku/go-ipset/ipset"
+	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/core/utils"
@@ -87,7 +87,7 @@ func (conf *Group) GenCallers(ctx context.Context) (callers []outbound.Caller) {
 		}
 	}
 	for _, addr := range conf.DoH { // dns over https服务器
-		if caller, err := outbound.NewDoHCallerV2(ctx, addr, dialer); err != nil {
+		if caller, err := outbound.NewDoHCallerV2(addr, dialer); err != nil {
 			utils.CtxError(ctx, "parse doh server error: "+err.Error())
 		} else {
 			callers = append(callers, caller)

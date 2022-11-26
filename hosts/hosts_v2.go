@@ -3,8 +3,8 @@ package hosts
 import (
 	"bufio"
 	"fmt"
-	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/ts-dns/config"
 	"net"
 	"os"

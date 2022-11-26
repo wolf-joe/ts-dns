@@ -152,13 +152,10 @@ func (c *dnsCache) Set(req *dns.Msg, resp *dns.Msg) {
 
 func (c *dnsCache) Start(cleanTick time.Duration) {
 	go func() {
-		tk := time.Tick(cleanTick)
+		tk := time.NewTicker(cleanTick)
 		for {
 			select {
-			case <-c.stopCh:
-				close(c.stopped)
-				return
-			case <-tk:
+			case <-tk.C:
 				// clean expired key
 				c.lock.Lock()
 				for key, item := range c.items {
@@ -167,6 +164,10 @@ func (c *dnsCache) Start(cleanTick time.Duration) {
 					}
 				}
 				c.lock.Unlock()
+			case <-c.stopCh:
+				tk.Stop()
+				close(c.stopped)
+				return
 			}
 		}
 	}()

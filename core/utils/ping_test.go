@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/agiledragon/gomonkey"
+	"github.com/sirupsen/logrus"
 	"github.com/sparrc/go-ping"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/core/utils/mock"
@@ -37,7 +37,6 @@ func TestPingIP(t *testing.T) {
 
 func TestFastestPingIP(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	ctx := NewCtx(nil, 0xffff)
 	port, timeout := 80, 100*time.Millisecond
 
 	mocker := mock.Mocker{}
@@ -52,10 +51,10 @@ func TestFastestPingIP(t *testing.T) {
 		return nil, errors.New("timeout")
 	})
 
-	ip, _, err := FastestPingIP(ctx, []string{"1.1.1.1", "1.1.1.2"}, port, timeout)
+	ip, _, err := FastestPingIP([]string{"1.1.1.1", "1.1.1.2"}, port, timeout)
 	assert.Nil(t, err)
 	assert.Equal(t, "1.1.1.1", ip)
 
-	ip, _, err = FastestPingIP(ctx, []string{"1.1.1.2", "1.1.1.3"}, port, timeout)
+	ip, _, err = FastestPingIP([]string{"1.1.1.2", "1.1.1.3"}, port, timeout)
 	assert.NotNil(t, err)
 }

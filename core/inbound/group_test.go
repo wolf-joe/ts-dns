@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/core/utils/mock"
 	"github.com/wolf-joe/ts-dns/outbound"

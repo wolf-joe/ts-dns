@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/matcher"
@@ -162,7 +162,7 @@ doPing:
 			return resp
 		}
 	}
-	fastestIP, cost, err := utils.FastestPingIP(ctx, allIP, g.tcpPingPort, pingTimeout)
+	fastestIP, cost, err := utils.FastestPingIP(allIP, g.tcpPingPort, pingTimeout)
 	if err != nil {
 		return firstResp
 	}

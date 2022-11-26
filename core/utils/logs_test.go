@@ -3,7 +3,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func TestCtxLog(t *testing.T) {

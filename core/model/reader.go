@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/janeczku/go-ipset/ipset"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/core/inbound"
@@ -156,7 +156,7 @@ func newCallers(ctx context.Context, socks5 string, dns, dot, doh []string) ([]o
 		ans = append(ans, caller)
 	}
 	for _, server := range doh {
-		caller, err = outbound.NewDoHCallerV2(ctx, server, dialer)
+		caller, err = outbound.NewDoHCallerV2(server, dialer)
 		if err != nil {
 			utils.CtxError(ctx, "parse doh %q error: %s", server, err)
 			return nil, err

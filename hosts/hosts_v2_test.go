@@ -1,8 +1,8 @@
 package hosts
 
 import (
-	"github.com/Sirupsen/logrus"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/config"
 	"testing"

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/janeczku/go-ipset/ipset"
 	"github.com/miekg/dns"
+	log "github.com/sirupsen/logrus"
+	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/cache"
 	"github.com/wolf-joe/ts-dns/core/common"
 	"github.com/wolf-joe/ts-dns/core/utils"

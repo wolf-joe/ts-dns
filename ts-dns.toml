@@ -5,6 +5,9 @@ listen = ":53"
 gfwlist = "gfwlist.txt"
 cnip = "cnip.txt"
 
+[hosts]
+"google.com" = "1.1.1.1"
+
 [groups]
   [groups.clean]
   dns = ["223.5.5.5", "114.114.114.114"]
@@ -12,3 +15,6 @@ cnip = "cnip.txt"
 
   [groups.dirty]
   dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
+  [groups.dirty.gfwlist]
+    file = "gfwlist.txt"
+    file_b64 = true
