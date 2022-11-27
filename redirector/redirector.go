@@ -54,7 +54,7 @@ func NewRedirector(globalConf *config.Conf, groups map[string]outbound.IGroup) (
 			return nil
 		}
 		newGroup := instance.Redirect(req, resp)
-		if src.Name() == newGroup.Name() {
+		if newGroup != nil && src.Name() == newGroup.Name() {
 			logrus.Warnf("redirector %q redirect to original group %q", instance, src)
 			return nil
 		}
@@ -133,7 +133,7 @@ func newCidrRedirector(name string, conf config.RedirectorConf, groups map[strin
 		}
 	}
 	if conf.RulesFile != "" {
-		logrus.Debugf("read rules file %q for redirector %s", name, conf.RulesFile)
+		logrus.Debugf("read rules file %q for redirector %s", conf.RulesFile, name)
 		file, err := os.Open(conf.RulesFile)
 		if err != nil {
 			return nil, fmt.Errorf("open %q failed: %w", conf.RulesFile, err)
@@ -142,7 +142,7 @@ func newCidrRedirector(name string, conf config.RedirectorConf, groups map[strin
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
-			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 				continue
 			}
 			if err = addEntry(line); err != nil {

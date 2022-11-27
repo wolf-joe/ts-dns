@@ -187,10 +187,11 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 			fields["q_type"] = dns.TypeToString[req.Question[0].Qtype]
 		}
 		if _info.matched != nil {
-			fields["group"] = _info.matched
-		}
-		if _info.fallback {
-			fields["fallback"] = true
+			if _info.fallback {
+				fields["group"] = "_" + _info.matched.Name()
+			} else {
+				fields["group"] = _info.matched.Name()
+			}
 		}
 		if _info.redirect != nil {
 			fields["redir"] = _info.redirect.Name()

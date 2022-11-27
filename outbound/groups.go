@@ -111,7 +111,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			if err != nil {
 				return nil, fmt.Errorf("build socks5 proxy %q failed: %w", conf.Socks5, err)
 			}
-			logrus.Debugf("set proxy(%s) for group %s", conf.Socks5, err)
+			logrus.Debugf("set proxy(%s) for group %s", conf.Socks5, name)
 			g.proxy = dialer
 		}
 		// caller
@@ -233,7 +233,7 @@ func (g *groupImpl) Handle(req *dns.Msg) *dns.Msg {
 		for _, caller := range g.callers {
 			resp, err := caller.Call(req)
 			if err != nil {
-				logrus.Warnf("group %s call %s failed: %+v", g, caller, err)
+				logrus.Warnf("group %s call %s failed: %+v", g.name, caller, err)
 				continue
 			}
 			return resp
@@ -250,7 +250,7 @@ func (g *groupImpl) Handle(req *dns.Msg) *dns.Msg {
 			if err == nil {
 				respCh <- resp
 			} else {
-				logrus.Warnf("group %s call %s failed: %+v", g, caller, err)
+				logrus.Warnf("group %s call %s failed: %+v", g.name, caller, err)
 				respCh <- nil
 			}
 		}(caller)
