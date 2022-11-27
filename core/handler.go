@@ -9,6 +9,7 @@ import (
 	"github.com/wolf-joe/ts-dns/config"
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/outbound"
+	"github.com/wolf-joe/ts-dns/redirector"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -126,8 +127,10 @@ func newHandle(conf *config.Conf) (*handlerImpl, error) {
 	if h.fallbackGroup == nil {
 		return nil, errors.New("fallback group not found")
 	}
-
-	// redirector todo
+	h.redirector, err = redirector.NewRedirector(conf, h.groups)
+	if err != nil {
+		return nil, fmt.Errorf("build redirector failed: %w", err)
+	}
 	return h, nil
 }
 
@@ -138,7 +141,7 @@ type handlerImpl struct {
 	hosts         hosts.IDNSHosts
 	groups        map[string]outbound.IGroup
 	fallbackGroup outbound.IGroup
-	redirector    IRedirector
+	redirector    redirector.Redirector
 }
 
 func (h *handlerImpl) ServeDNS(writer dns.ResponseWriter, req *dns.Msg) {
@@ -189,7 +192,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 			fields["fallback"] = true
 		}
 		if _info.redirect != nil {
-			fields["redir"] = _info.redirect.String()
+			fields["redir"] = _info.redirect.Name()
 		}
 		if resp == nil {
 			fields["answer"] = "nil"
@@ -236,7 +239,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 
 	// redirect
 	if h.redirector != nil {
-		if group := h.redirector.Redirect(req, resp); group != nil {
+		if group := h.redirector(matched, req, resp); group != nil {
 			matched = group
 			resp = group.Handle(req)
 			_info.redirect = group

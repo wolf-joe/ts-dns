@@ -29,6 +29,7 @@ type IGroup interface {
 	PostProcess(req *dns.Msg, resp *dns.Msg)
 	Start(resolver dns.Handler)
 	Stop()
+	Name() string
 	String() string
 }
 
@@ -191,7 +192,8 @@ type groupImpl struct {
 	stopped chan struct{}
 }
 
-func (g *groupImpl) String() string   { return g.name }
+func (g *groupImpl) Name() string     { return g.name }
+func (g *groupImpl) String() string   { return "group_" + g.Name() }
 func (g *groupImpl) IsFallback() bool { return g.fallback }
 
 func (g *groupImpl) Match(req *dns.Msg) bool {

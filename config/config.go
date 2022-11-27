@@ -5,12 +5,12 @@ type Conf struct {
 	Hosts      map[string]string `toml:"hosts"`
 	Cache      CacheConf         `toml:"cache"`
 
-	Groups        map[string]Group `toml:"groups"`
-	DisableIPv6   bool             `toml:"disable_ipv6"`
-	DisableQTypes []string         `toml:"disable_qtypes"`
+	Groups        map[string]Group          `toml:"groups"`
+	DisableIPv6   bool                      `toml:"disable_ipv6"`
+	DisableQTypes []string                  `toml:"disable_qtypes"`
+	Redirectors   map[string]RedirectorConf `toml:"redirectors"`
 
 	Listen string `toml:"listen"`
-	CNIP   string `toml:"cnip"`
 }
 
 // GFWListConf GFW List相关配置
@@ -45,8 +45,17 @@ type Group struct {
 	GFWListFile string   `toml:"gfwlist_file"`
 	GFWListURL  string   `toml:"gfwlist_url"`
 	Fallback    bool     `toml:"fallback"`
+	Redirector  string   `toml:"redirector"`
 }
 
 func (g Group) IsSetGFWList() bool {
 	return g.GFWListFile != "" || g.GFWListURL != ""
+}
+
+// RedirectorConf 重定向器配置
+type RedirectorConf struct {
+	Type      string   `toml:"type"`
+	Rules     []string `toml:"rules"`
+	RulesFile string   `toml:"rules_file"`
+	DstGroup  string   `toml:"dst_group"`
 }
