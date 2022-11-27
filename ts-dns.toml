@@ -2,8 +2,6 @@
 # https://github.com/wolf-joe/ts-dns
 
 listen = ":53"
-gfwlist = "gfwlist.txt"
-cnip = "cnip.txt"
 
 [hosts]
 "google.com" = "1.1.1.1"

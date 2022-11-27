@@ -13,13 +13,6 @@ type Conf struct {
 	Listen string `toml:"listen"`
 }
 
-// GFWListConf GFW List相关配置
-type GFWListConf struct {
-	URL     string `toml:"url"`
-	File    string `toml:"file"`
-	FileB64 bool   `toml:"file_b64"`
-}
-
 // CacheConf 配置文件中cache section对应的结构
 type CacheConf struct {
 	Size   int `toml:"size"`
@@ -29,23 +22,28 @@ type CacheConf struct {
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
-	ECS         string   `toml:"ecs"`
-	NoCookie    bool     `toml:"no_cookie"`
-	Socks5      string   `toml:"socks5"`
-	IPSet       string   `toml:"ipset"`
-	IPSetTTL    int      `toml:"ipset_ttl"`
-	DNS         []string `toml:"dns"`
-	DoT         []string `toml:"dot"`
-	DoH         []string `toml:"doh"`
-	Concurrent  bool     `toml:"concurrent"`
-	FastestV4   bool     `toml:"fastest_v4"`
-	TCPPingPort int      `toml:"tcp_ping_port"`
+	ECS      string `toml:"ecs"`
+	NoCookie bool   `toml:"no_cookie"`
+
 	Rules       []string `toml:"rules"`
 	RulesFile   string   `toml:"rules_file"`
 	GFWListFile string   `toml:"gfwlist_file"`
 	GFWListURL  string   `toml:"gfwlist_url"`
 	Fallback    bool     `toml:"fallback"`
-	Redirector  string   `toml:"redirector"`
+
+	Socks5 string   `toml:"socks5"`
+	DNS    []string `toml:"dns"`
+	DoT    []string `toml:"dot"`
+	DoH    []string `toml:"doh"`
+
+	Concurrent  bool `toml:"concurrent"`
+	FastestV4   bool `toml:"fastest_v4"`
+	TCPPingPort int  `toml:"tcp_ping_port"`
+
+	IPSet    string `toml:"ipset"`
+	IPSetTTL int    `toml:"ipset_ttl"`
+
+	Redirector string `toml:"redirector"`
 }
 
 func (g Group) IsSetGFWList() bool {

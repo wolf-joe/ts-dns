@@ -42,6 +42,7 @@ var (
 	_ IHandler = &handlerWrapper{}
 )
 
+// todo: add unittest
 type handlerWrapper struct {
 	handlerPtr unsafe.Pointer // type: *handlerImpl
 }
