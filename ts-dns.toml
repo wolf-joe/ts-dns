@@ -15,6 +15,4 @@ cnip = "cnip.txt"
 
   [groups.dirty]
   dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
-  [groups.dirty.gfwlist]
-    file = "gfwlist.txt"
-    file_b64 = true
+  gfwlist_file = "gfwlist.txt"

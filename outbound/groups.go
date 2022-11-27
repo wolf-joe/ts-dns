@@ -40,14 +40,14 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 		if conf.Fallback && seenFallback {
 			return nil, errors.New("only one group can be fallback group")
 		}
-		if conf.GFWList != nil && seenGFWList {
+		if conf.IsSetGFWList() && seenGFWList {
 			return nil, errors.New("only one group can use gfw list mode")
-		}
-		if conf.GFWList != nil {
-			seenGFWList = true
 		}
 		if conf.Fallback {
 			seenFallback = true
+		}
+		if conf.IsSetGFWList() {
+			seenGFWList = true
 		}
 	}
 	// build groups
@@ -57,7 +57,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			fallback:    conf.Fallback,
 			matcher:     nil,
 			gfwList:     nil,
-			gfwListURL:  "",
+			gfwListURL:  conf.GFWListURL,
 			noCookie:    conf.NoCookie,
 			withECS:     nil,
 			callers:     nil,
@@ -70,7 +70,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			stopped:     make(chan struct{}),
 		}
 		// read rules
-		text := strings.Join(conf.Rules, "")
+		text := strings.Join(conf.Rules, "\n")
 		g.matcher = matcher.NewABPByText(text)
 		if filename := conf.RulesFile; filename != "" {
 			m, err := matcher.NewABPByFile(filename, false)
@@ -80,23 +80,18 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			g.matcher.Extend(m)
 		}
 		// gfw list
-		if gfwConf := conf.GFWList; gfwConf != nil {
-			if gfwConf.File == "" && g.gfwListURL == "" {
-				return nil, fmt.Errorf("empty gfwlist config group: %s", name)
+		if conf.GFWListFile != "" {
+			m, err := matcher.NewABPByFile(conf.GFWListFile, true)
+			if err != nil {
+				return nil, fmt.Errorf("build gfw list failed: %w", err)
 			}
-			if filename := gfwConf.File; filename != "" {
-				m, err := matcher.NewABPByFile(filename, gfwConf.FileB64)
-				if err != nil {
-					return nil, fmt.Errorf("build gfw list failed: %w", err)
-				}
-				atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
-			}
-			g.gfwListURL = gfwConf.URL
+			atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
 		}
-		if len(conf.Rules) == 0 && conf.RulesFile == "" && conf.GFWList == nil {
+		if len(conf.Rules) == 0 && conf.RulesFile == "" && !conf.IsSetGFWList() {
 			if seenFallback {
 				return nil, fmt.Errorf("empty rule for group %s", name)
 			}
+			logrus.Warnf("set group %s as fallback group", name)
 			seenFallback = true
 			g.fallback = true
 		}
@@ -106,6 +101,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			if err != nil {
 				return nil, fmt.Errorf("parse ecs %q failed: %w", conf.ECS, err)
 			}
+			logrus.Debugf("set ecs(%s) for group %s", conf.ECS, err)
 			g.withECS = ecs
 		}
 		// proxy
@@ -114,6 +110,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 			if err != nil {
 				return nil, fmt.Errorf("build socks5 proxy %q failed: %w", conf.Socks5, err)
 			}
+			logrus.Debugf("set proxy(%s) for group %s", conf.Socks5, err)
 			g.proxy = dialer
 		}
 		// caller

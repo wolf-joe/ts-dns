@@ -29,19 +29,24 @@ type CacheConf struct {
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
-	ECS         string       `toml:"ecs"`
-	NoCookie    bool         `toml:"no_cookie"`
-	Socks5      string       `toml:"socks5"`
-	IPSet       string       `toml:"ipset"`
-	IPSetTTL    int          `toml:"ipset_ttl"`
-	DNS         []string     `toml:"dns"`
-	DoT         []string     `toml:"dot"`
-	DoH         []string     `toml:"doh"`
-	Concurrent  bool         `toml:"concurrent"`
-	FastestV4   bool         `toml:"fastest_v4"`
-	TCPPingPort int          `toml:"tcp_ping_port"`
-	Rules       []string     `toml:"rules"`
-	RulesFile   string       `toml:"rules_file"`
-	GFWList     *GFWListConf `toml:"gfwlist"`
-	Fallback    bool         `toml:"fallback"`
+	ECS         string   `toml:"ecs"`
+	NoCookie    bool     `toml:"no_cookie"`
+	Socks5      string   `toml:"socks5"`
+	IPSet       string   `toml:"ipset"`
+	IPSetTTL    int      `toml:"ipset_ttl"`
+	DNS         []string `toml:"dns"`
+	DoT         []string `toml:"dot"`
+	DoH         []string `toml:"doh"`
+	Concurrent  bool     `toml:"concurrent"`
+	FastestV4   bool     `toml:"fastest_v4"`
+	TCPPingPort int      `toml:"tcp_ping_port"`
+	Rules       []string `toml:"rules"`
+	RulesFile   string   `toml:"rules_file"`
+	GFWListFile string   `toml:"gfwlist_file"`
+	GFWListURL  string   `toml:"gfwlist_url"`
+	Fallback    bool     `toml:"fallback"`
+}
+
+func (g Group) IsSetGFWList() bool {
+	return g.GFWListFile != "" || g.GFWListURL != ""
 }

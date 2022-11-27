@@ -47,20 +47,17 @@ type handlerWrapper struct {
 
 func (w *handlerWrapper) ReloadConfig(conf *config.Conf) error {
 	// create & start new handler
-	logrus.Debugf("begin reload config")
 	h, err := newHandle(conf)
 	if err != nil {
 		return fmt.Errorf("make new handler failed: %w", err)
 	}
 	h.start()
-	logrus.Debugf("reload config: new handler started")
 	// swap handler
 	for {
 		old := atomic.LoadPointer(&w.handlerPtr)
 		if atomic.CompareAndSwapPointer(&w.handlerPtr, old, unsafe.Pointer(h)) {
 			if old != nil {
 				(*handlerImpl)(old).stop()
-				logrus.Debugf("reload config: old handler stopped")
 			}
 			break
 		}
@@ -257,6 +254,7 @@ func (h *handlerImpl) start() {
 		group.Start(h)
 	}
 	h.cache.Start(time.Minute)
+	logrus.Debugf("start handler success")
 }
 
 func (h *handlerImpl) stop() {
