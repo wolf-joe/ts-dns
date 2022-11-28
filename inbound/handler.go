@@ -1,4 +1,4 @@
-package core
+package inbound
 
 import (
 	"errors"
@@ -258,7 +258,7 @@ func (h *handlerImpl) start() {
 	for _, group := range h.groups {
 		group.Start(h)
 	}
-	h.cache.Start(time.Minute)
+	h.cache.Start()
 	logrus.Debugf("start handler success")
 }
 

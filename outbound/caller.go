@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/ts-dns/utils"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/valyala/fastrand"
-	"github.com/wolf-joe/ts-dns/core/utils"
 	"golang.org/x/net/proxy"
 )
 

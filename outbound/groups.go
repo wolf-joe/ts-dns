@@ -9,9 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/go-ipset/ipset"
 	"github.com/wolf-joe/ts-dns/config"
-	"github.com/wolf-joe/ts-dns/core/common"
-	"github.com/wolf-joe/ts-dns/core/utils"
 	"github.com/wolf-joe/ts-dns/matcher"
+	"github.com/wolf-joe/ts-dns/utils"
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
@@ -98,7 +97,7 @@ func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
 		}
 		// ecs
 		if conf.ECS != "" {
-			ecs, err := common.ParseECS(conf.ECS)
+			ecs, err := utils.ParseECS(conf.ECS)
 			if err != nil {
 				return nil, fmt.Errorf("parse ecs %q failed: %w", conf.ECS, err)
 			}
@@ -221,10 +220,10 @@ func (g *groupImpl) Handle(req *dns.Msg) *dns.Msg {
 	if g.noCookie || g.withECS != nil {
 		req = req.Copy()
 		if g.noCookie {
-			common.RemoveEDNSCookie(req)
+			utils.RemoveEDNSCookie(req)
 		}
 		if g.withECS != nil {
-			common.SetDefaultECS(req, g.withECS)
+			utils.SetDefaultECS(req, g.withECS)
 		}
 	}
 

@@ -5,7 +5,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/valyala/fastrand"
 	"github.com/wolf-joe/ts-dns/config"
-	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/utils"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +24,7 @@ type IDNSCache interface {
 	// Set save response to cache
 	Set(req *dns.Msg, resp *dns.Msg)
 	// Start life cycle begin
-	Start(cleanTick time.Duration)
+	Start(cleanTick ...time.Duration)
 	// Stop life cycle end
 	Stop()
 }
@@ -75,7 +75,7 @@ type dnsCache struct {
 func (c *dnsCache) cacheKey(req *dns.Msg) string {
 	question := req.Question[0]
 	key := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if subnet := common.FormatECS(req); subnet != "" {
+	if subnet := utils.FormatECS(req); subnet != "" {
 		key += "." + subnet
 	}
 	return strings.ToLower(key)
@@ -155,8 +155,12 @@ func (c *dnsCache) Set(req *dns.Msg, resp *dns.Msg) {
 	c.lock.Unlock()
 }
 
-func (c *dnsCache) Start(cleanTick time.Duration) {
+func (c *dnsCache) Start(_cleanTick ...time.Duration) {
 	go func() {
+		cleanTick := time.Minute
+		if len(_cleanTick) > 0 {
+			cleanTick = _cleanTick[0]
+		}
 		tk := time.NewTicker(cleanTick)
 		for {
 			select {

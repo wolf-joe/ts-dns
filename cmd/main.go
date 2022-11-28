@@ -8,7 +8,7 @@ import (
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/ts-dns/config"
-	"github.com/wolf-joe/ts-dns/core"
+	"github.com/wolf-joe/ts-dns/inbound"
 	"os"
 	"os/signal"
 	"strings"
@@ -38,11 +38,9 @@ func main() {
 	if _, err := toml.DecodeFile(*filename, conf); err != nil {
 		logrus.Fatalf("load config file %q failed: %+v", *filename, err)
 	}
-	if *debugMode {
-		buf := bytes.NewBuffer(nil)
-		_ = toml.NewEncoder(buf).Encode(conf)
-		logrus.Debugf("load config success: %s", buf)
-	}
+	buf := bytes.NewBuffer(nil)
+	_ = toml.NewEncoder(buf).Encode(conf)
+	logrus.Debugf("load config success: %s", buf)
 	// 解析监听地址
 	if *listen == "" {
 		listen = &conf.Listen
@@ -55,7 +53,7 @@ func main() {
 		logrus.Fatalf("unknown network: %q", network)
 	}
 	// 构建handler
-	handler, err := core.NewHandler(conf)
+	handler, err := inbound.NewHandler(conf)
 	if err != nil {
 		logrus.Fatalf("build handler failed: %+v", err)
 	}
@@ -86,7 +84,7 @@ func main() {
 	logrus.Infof("ts-dns exists")
 }
 
-func reloadConf(ch chan os.Signal, filename *string, handler core.IHandler) {
+func reloadConf(ch chan os.Signal, filename *string, handler inbound.IHandler) {
 	for {
 		select {
 		case <-ch:
@@ -95,6 +93,9 @@ func reloadConf(ch chan os.Signal, filename *string, handler core.IHandler) {
 				logrus.Warnf("load config file %q failed: %+v", *filename, err)
 				continue
 			}
+			buf := bytes.NewBuffer(nil)
+			_ = toml.NewEncoder(buf).Encode(conf)
+			logrus.Debugf("reload config: %s", buf)
 			if err := handler.ReloadConfig(conf); err != nil {
 				logrus.Warnf("reload config failed: %+v", err)
 				continue
