@@ -50,6 +50,10 @@ func (g Group) IsSetGFWList() bool {
 	return g.GFWListFile != "" || g.GFWListURL != ""
 }
 
+func (g Group) IsEmptyRule() bool {
+	return len(g.Rules) == 0 && g.RulesFile == "" && !g.IsSetGFWList()
+}
+
 // RedirectorConf 重定向器配置
 type RedirectorConf struct {
 	Type      string   `toml:"type"`

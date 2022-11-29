@@ -36,7 +36,12 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 	groups := make(map[string]IGroup, len(globalConf.Groups))
 	// check non-repeatable flag
 	seenGFWList, seenFallback := false, false
-	for _, conf := range globalConf.Groups {
+	// build groups
+	for name, conf := range globalConf.Groups {
+		if conf.IsEmptyRule() {
+			logrus.Warnf("set empty rule group %s as fallback group", name)
+			conf.Fallback = true
+		}
 		if conf.Fallback && seenFallback {
 			return nil, errors.New("only one group can be fallback group")
 		}
@@ -49,9 +54,6 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 		if conf.IsSetGFWList() {
 			seenGFWList = true
 		}
-	}
-	// build groups
-	for name, conf := range globalConf.Groups {
 		g := &groupImpl{
 			name:        name,
 			fallback:    conf.Fallback,
@@ -86,14 +88,6 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 				return nil, fmt.Errorf("build gfw list failed: %w", err)
 			}
 			atomic.StorePointer(&g.gfwList, unsafe.Pointer(m))
-		}
-		if len(conf.Rules) == 0 && conf.RulesFile == "" && !conf.IsSetGFWList() {
-			if seenFallback {
-				return nil, fmt.Errorf("empty rule for group %s", name)
-			}
-			logrus.Warnf("set group %s as fallback group", name)
-			seenFallback = true
-			g.fallback = true
 		}
 		// ecs
 		if conf.ECS != "" {

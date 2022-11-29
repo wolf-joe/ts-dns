@@ -2,11 +2,6 @@ package mock
 
 import (
 	"github.com/miekg/dns"
-	"github.com/wolf-joe/ts-dns/outbound"
-)
-
-var (
-	_ outbound.IGroup = Group{}
 )
 
 type Group struct {
