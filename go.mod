@@ -11,6 +11,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/valyala/fastrand v1.0.0
 	github.com/wolf-joe/go-ipset v0.0.0-20221126092954-3bc3b2576989
+	github.com/yl2chen/cidranger v1.0.2
 	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985
 )
 
@@ -18,7 +19,6 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/yl2chen/cidranger v1.0.2 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
 	golang.org/x/tools v0.1.6-0.20210726203631-07bc1bf47fb2 // indirect

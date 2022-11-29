@@ -1,7 +1,7 @@
 # Telescope DNS
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/wolf-joe/ts-dns)](https://github.com/wolf-joe/ts-dns/releases)
-[![Build Status](https://travis-ci.org/wolf-joe/ts-dns.svg?branch=master)](https://travis-ci.org/wolf-joe/ts-dns)
+[![Go](https://github.com/wolf-joe/ts-dns/actions/workflows/go.yml/badge.svg)](https://github.com/wolf-joe/ts-dns/actions/workflows/go.yml)
 [![codecov](https://codecov.io/gh/wolf-joe/ts-dns/branch/master/graph/badge.svg)](https://codecov.io/gh/wolf-joe/ts-dns)
 [![Go Report Card](https://goreportcard.com/badge/github.com/wolf-joe/ts-dns)](https://goreportcard.com/report/github.com/wolf-joe/ts-dns)
 ![GitHub](https://img.shields.io/github/license/wolf-joe/ts-dns)
