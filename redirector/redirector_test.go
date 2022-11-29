@@ -83,7 +83,7 @@ func Test_newCidrRedirector(t *testing.T) {
 func TestNewRedirector(t *testing.T) {
 	//src := outbound.MockGroup{}
 	t.Run("unknown_type", func(t *testing.T) {
-		conf := &config.Conf{
+		conf := config.Conf{
 			Redirectors: map[string]config.RedirectorConf{
 				"redir1": {Type: ""},
 			},
@@ -95,7 +95,7 @@ func TestNewRedirector(t *testing.T) {
 		t.Logf("%s", err)
 	})
 	t.Run("unknown_redir", func(t *testing.T) {
-		conf := &config.Conf{
+		conf := config.Conf{
 			Groups: map[string]config.Group{
 				"g1": {Redirector: "redir1"},
 			},
@@ -109,7 +109,7 @@ func TestNewRedirector(t *testing.T) {
 		t.Logf("%s", err)
 	})
 	t.Run("redirect_cycle", func(t *testing.T) {
-		conf := &config.Conf{
+		conf := config.Conf{
 			Groups: map[string]config.Group{
 				"g1": {Redirector: "redir1"},
 			},
@@ -128,7 +128,7 @@ func TestNewRedirector(t *testing.T) {
 		assert.Nil(t, newGroup)
 	})
 	t.Run("redirect_success", func(t *testing.T) {
-		conf := &config.Conf{
+		conf := config.Conf{
 			Groups: map[string]config.Group{
 				"g1": {Redirector: "redir1"},
 			},
@@ -153,7 +153,7 @@ func TestNewRedirector(t *testing.T) {
 		assert.Equal(t, "g2", newGroup.Name())
 	})
 	t.Run("redirect_empty", func(t *testing.T) {
-		conf := &config.Conf{
+		conf := config.Conf{
 			Groups: map[string]config.Group{
 				"g1": {},
 			},

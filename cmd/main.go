@@ -34,8 +34,8 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 	// 读取配置文件
-	conf := new(config.Conf)
-	if _, err := toml.DecodeFile(*filename, conf); err != nil {
+	conf := config.Conf{}
+	if _, err := toml.DecodeFile(*filename, &conf); err != nil {
 		logrus.Fatalf("load config file %q failed: %+v", *filename, err)
 	}
 	buf := bytes.NewBuffer(nil)
@@ -87,8 +87,8 @@ func main() {
 func reloadConf(ch chan os.Signal, filename *string, handler inbound.IHandler) {
 	for {
 		<-ch
-		conf := new(config.Conf)
-		if _, err := toml.DecodeFile(*filename, conf); err != nil {
+		conf := config.Conf{}
+		if _, err := toml.DecodeFile(*filename, &conf); err != nil {
 			logrus.Warnf("load config file %q failed: %+v", *filename, err)
 			continue
 		}

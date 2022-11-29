@@ -19,7 +19,7 @@ type IDNSHosts interface {
 	Get(req *dns.Msg) *dns.Msg
 }
 
-func NewDNSHosts(conf *config.Conf) (IDNSHosts, error) {
+func NewDNSHosts(conf config.Conf) (IDNSHosts, error) {
 	domainMap := make(map[string]ipInfo, len(conf.Hosts))
 	regexMap := make(map[*regexp.Regexp]ipInfo, len(conf.Hosts))
 	load := func(host, ipStr string) error {

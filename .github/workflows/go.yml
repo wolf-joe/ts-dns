@@ -10,25 +10,6 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.18
-
-      - name: Build
-        run: go build -v ./...
-
-      - name: Test
-        run: go test -v ./... -gcflags=all=-l -coverprofile=coverage.txt -covermode=atomic -race
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-
   golangci:
     name: lint
     runs-on: ubuntu-latest
@@ -48,6 +29,7 @@ jobs:
 
           # Optional: golangci-lint command line arguments.
           # args: --issues-exit-code=0
+          args: "--out-${NO_FUTURE}format colored-line-number"
 
           # Optional: show only new issues if it's a pull request. The default value is `false`.
           # only-new-issues: true
@@ -61,3 +43,22 @@ jobs:
 
           # Optional: if set to true then the action don't cache or restore ~/.cache/go-build.
           # skip-build-cache: true
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./... -gcflags=all=-l -coverprofile=coverage.txt -covermode=atomic -race
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3

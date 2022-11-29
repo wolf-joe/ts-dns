@@ -20,7 +20,7 @@ func buildReq(host string, qType uint16) *dns.Msg {
 
 func TestNewHostReader(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	cfg := &config.Conf{Hosts: map[string]string{
+	cfg := config.Conf{Hosts: map[string]string{
 		"z.cn": "1.1.1.1",
 	}, HostsFiles: []string{
 		"testdata/test.txt",
@@ -59,14 +59,14 @@ func TestNewHostReader(t *testing.T) {
 		}
 	}
 
-	cfg = &config.Conf{HostsFiles: []string{
+	cfg = config.Conf{HostsFiles: []string{
 		"testdata/invalid.txt",
 	}}
 	r, err = NewDNSHosts(cfg)
 	t.Logf("%+v", err)
 	assert.NotNil(t, err)
 
-	cfg = &config.Conf{HostsFiles: []string{
+	cfg = config.Conf{HostsFiles: []string{
 		"testdata/not_exists.txt",
 	}}
 	r, err = NewDNSHosts(cfg)
@@ -75,7 +75,7 @@ func TestNewHostReader(t *testing.T) {
 }
 
 func BenchmarkHostReader_Regexp(b *testing.B) {
-	hosts, err := NewDNSHosts(&config.Conf{Hosts: map[string]string{
+	hosts, err := NewDNSHosts(config.Conf{Hosts: map[string]string{
 		"z.cn":    "1.1.1.1",
 		"*.wd.cn": "1.1.1.1",
 	}})
@@ -88,7 +88,7 @@ func BenchmarkHostReader_Regexp(b *testing.B) {
 }
 
 func BenchmarkHostReader_Domain(b *testing.B) {
-	r, err := NewDNSHosts(&config.Conf{Hosts: map[string]string{
+	r, err := NewDNSHosts(config.Conf{Hosts: map[string]string{
 		"z.cn":    "1.1.1.1",
 		"*.wd.cn": "1.1.1.1",
 	}})

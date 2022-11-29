@@ -22,12 +22,12 @@ import (
 // IHandler ts-dns service handler
 type IHandler interface {
 	dns.Handler
-	ReloadConfig(conf *config.Conf) error
+	ReloadConfig(conf config.Conf) error
 	Stop()
 }
 
 // NewHandler Build a service can handle dns request, life cycle start immediately
-func NewHandler(conf *config.Conf) (IHandler, error) {
+func NewHandler(conf config.Conf) (IHandler, error) {
 	h := new(handlerWrapper)
 	if err := h.ReloadConfig(conf); err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ type handlerWrapper struct {
 	handlerPtr unsafe.Pointer // type: *handlerImpl
 }
 
-func (w *handlerWrapper) ReloadConfig(conf *config.Conf) error {
+func (w *handlerWrapper) ReloadConfig(conf config.Conf) error {
 	// create & start new handler
 	h, err := newHandle(conf)
 	if err != nil {
@@ -86,7 +86,7 @@ func (w *handlerWrapper) Stop() {
 
 // endregion
 
-func newHandle(conf *config.Conf) (*handlerImpl, error) {
+func newHandle(conf config.Conf) (*handlerImpl, error) {
 	var err error
 	h := &handlerImpl{
 		disableQTypes: map[uint16]bool{},

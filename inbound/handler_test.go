@@ -19,7 +19,7 @@ func Test_handlerImpl_ServeDNS(t *testing.T) {
 }
 
 func TestNewHandler(t *testing.T) {
-	h, err := NewHandler(&config.Conf{
+	h, err := NewHandler(config.Conf{
 		HostsFiles:    nil,
 		Hosts:         nil,
 		Cache:         config.CacheConf{},
@@ -32,7 +32,7 @@ func TestNewHandler(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, h)
 
-	err = h.ReloadConfig(&config.Conf{
+	err = h.ReloadConfig(config.Conf{
 		HostsFiles:    nil,
 		Hosts:         nil,
 		Cache:         config.CacheConf{},
@@ -49,7 +49,7 @@ func TestNewHandler(t *testing.T) {
 	h.Stop()
 	h.Stop()
 
-	_, err = NewHandler(&config.Conf{
+	_, err = NewHandler(config.Conf{
 		HostsFiles:    []string{"not_exists.txt"},
 		Hosts:         nil,
 		Cache:         config.CacheConf{},
@@ -66,7 +66,7 @@ func TestNewHandler(t *testing.T) {
 func Test_newHandle(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	t.Run("disable", func(t *testing.T) {
-		_, err := newHandle(&config.Conf{
+		_, err := newHandle(config.Conf{
 			HostsFiles:    nil,
 			Hosts:         nil,
 			Cache:         config.CacheConf{},
@@ -79,7 +79,7 @@ func Test_newHandle(t *testing.T) {
 		assert.NotNil(t, err)
 		t.Log(err)
 
-		h, err := newHandle(&config.Conf{
+		h, err := newHandle(config.Conf{
 			HostsFiles:    nil,
 			Hosts:         nil,
 			Cache:         config.CacheConf{},

@@ -29,7 +29,7 @@ type IDNSCache interface {
 	Stop()
 }
 
-func NewDNSCache(conf *config.Conf) (IDNSCache, error) {
+func NewDNSCache(conf config.Conf) (IDNSCache, error) {
 	minTTL, maxTTL := DefaultMinTTL, DefaultMaxTTL
 	if conf.Cache.MinTTL > 0 {
 		minTTL = time.Second * time.Duration(conf.Cache.MinTTL)

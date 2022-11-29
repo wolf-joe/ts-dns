@@ -32,7 +32,7 @@ type IGroup interface {
 	String() string
 }
 
-func BuildGroups(globalConf *config.Conf) (map[string]IGroup, error) {
+func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 	groups := make(map[string]IGroup, len(globalConf.Groups))
 	// check non-repeatable flag
 	seenGFWList, seenFallback := false, false

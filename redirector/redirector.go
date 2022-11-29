@@ -20,7 +20,7 @@ const (
 
 type Redirector func(src outbound.IGroup, req, resp *dns.Msg) outbound.IGroup
 
-func NewRedirector(globalConf *config.Conf, groups map[string]outbound.IGroup) (Redirector, error) {
+func NewRedirector(globalConf config.Conf, groups map[string]outbound.IGroup) (Redirector, error) {
 	// redirector name -> instance
 	redirectorMap := make(map[string]iRedirector, len(globalConf.Redirectors))
 	for name, conf := range globalConf.Redirectors {
