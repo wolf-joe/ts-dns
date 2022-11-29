@@ -48,9 +48,7 @@ func FormatECS(r *dns.Msg) string {
 		switch extra.(type) {
 		case *dns.OPT:
 			for _, opt := range extra.(*dns.OPT).Option {
-				switch opt.(type) {
-				case *dns.EDNS0_SUBNET:
-					ecs := opt.(*dns.EDNS0_SUBNET)
+				if ecs, ok := opt.(*dns.EDNS0_SUBNET); ok {
 					return fmt.Sprintf("%s/%d", ecs.Address, ecs.SourceNetmask)
 				}
 			}

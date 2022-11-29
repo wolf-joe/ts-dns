@@ -135,8 +135,8 @@ func (caller *DoHCallerV2) run(resolveCycle time.Duration, timeout time.Duration
 func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	genClient := func(ip string) *http.Client {
 		return &http.Client{Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
-				addr = ip + ":" + caller.port // 重写addr
+			DialContext: func(ctx context.Context, network, _ string) (conn net.Conn, err error) {
+				addr := ip + ":" + caller.port // 重写addr
 				return caller.dialer.Dial(network, addr)
 			},
 		}}
@@ -179,11 +179,9 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	}
 	if len(clients) > 0 {
 		caller.clients = clients
-		//utils.CtxDebug(caller.ctx, "%s resolve %s", caller, ips)
-		// todo log
+		logrus.Debugf("%s resolve ip %s", caller, ips)
 	} else {
-		// todo log
-		//utils.CtxDebug(caller.ctx, "%s resolve failed", caller)
+		logrus.Warnf("%s resolve ip failed", caller)
 	}
 }
 

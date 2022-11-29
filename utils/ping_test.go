@@ -56,6 +56,6 @@ func TestFastestPingIP(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "1.1.1.1", ip)
 
-	ip, _, err = FastestPingIP([]string{"1.1.1.2", "1.1.1.3"}, port, timeout)
+	_, _, err = FastestPingIP([]string{"1.1.1.2", "1.1.1.3"}, port, timeout)
 	assert.NotNil(t, err)
 }

@@ -62,14 +62,14 @@ func TestNewHostReader(t *testing.T) {
 	cfg = config.Conf{HostsFiles: []string{
 		"testdata/invalid.txt",
 	}}
-	r, err = NewDNSHosts(cfg)
+	_, err = NewDNSHosts(cfg)
 	t.Logf("%+v", err)
 	assert.NotNil(t, err)
 
 	cfg = config.Conf{HostsFiles: []string{
 		"testdata/not_exists.txt",
 	}}
-	r, err = NewDNSHosts(cfg)
+	_, err = NewDNSHosts(cfg)
 	t.Logf("%+v", err)
 	assert.NotNil(t, err)
 }

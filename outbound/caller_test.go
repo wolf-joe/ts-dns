@@ -101,17 +101,17 @@ func TestDoHCallerV2(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
 	// 测试解析url失败的case
-	caller, err := NewDoHCallerV2("\n", nil)
+	_, err := NewDoHCallerV2("\n", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("abc", nil)
+	_, err = NewDoHCallerV2("abc", nil)
 	assert.NotNil(t, err)
-	caller, err = NewDoHCallerV2("https://abc::/", nil)
+	_, err = NewDoHCallerV2("https://abc::/", nil)
 	assert.NotNil(t, err)
 
 	url := "https://dns.alidns.com/dns-query"
 
 	// 测试run和stop
-	caller, err = NewDoHCallerV2(url, nil)
+	caller, err := NewDoHCallerV2(url, nil)
 	caller.Start(nil)
 	assert.Nil(t, err)
 	caller.Exit()
@@ -182,19 +182,19 @@ func TestDoHCallerV2(t *testing.T) {
 	assert.Nil(t, err)
 	caller.Start(resolver)
 	// Pack失败
-	resp, err := caller.Call(req)
+	_, err = caller.Call(req)
 	assert.NotNil(t, err)
 	// Pack成功，但NewRequest失败
-	resp, err = caller.Call(req)
+	_, err = caller.Call(req)
 	assert.NotNil(t, err)
 	// Pack、NewRequest成功，但Do失败
-	resp, err = caller.Call(req)
+	_, err = caller.Call(req)
 	assert.NotNil(t, err)
 	// Pack、NewRequest、Do成功，但ReadAll失败
-	resp, err = caller.Call(req)
+	_, err = caller.Call(req)
 	assert.NotNil(t, err)
 	// Pack、NewRequest、Do、ReadAll成功，但Unpack失败
-	resp, err = caller.Call(req)
+	resp, err := caller.Call(req)
 	assert.NotNil(t, err)
 	assert.Nil(t, resp)
 	// Pack、NewRequest、Do、ReadAll、Unpack成功
