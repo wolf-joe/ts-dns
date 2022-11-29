@@ -8,20 +8,6 @@ import (
 	"github.com/miekg/dns"
 )
 
-// ExtractA 提取dns响应中的A记录
-func ExtractA(r *dns.Msg) (records []*dns.A) {
-	if r == nil {
-		return
-	}
-	for _, answer := range r.Answer {
-		switch answer.(type) {
-		case *dns.A:
-			records = append(records, answer.(*dns.A))
-		}
-	}
-	return
-}
-
 // ParseECS 将字符串（IP/CIDR）转换为EDNS CLIENT SUBNET对象
 func ParseECS(s string) (ecs *dns.EDNS0_SUBNET, err error) {
 	if s == "" {

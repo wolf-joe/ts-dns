@@ -47,8 +47,7 @@ func NewRedirector(globalConf *config.Conf, groups map[string]outbound.IGroup) (
 		}
 	}
 	// return runtime redirector
-	var redirector Redirector
-	redirector = func(src outbound.IGroup, req, resp *dns.Msg) outbound.IGroup {
+	redirector := func(src outbound.IGroup, req, resp *dns.Msg) outbound.IGroup {
 		instance, exists := group2redir[src.Name()]
 		if !exists {
 			return nil

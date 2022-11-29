@@ -34,18 +34,7 @@ func (w *FakeRespWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (w *FakeRespWriter) Close() error {
-	return nil
-}
-
-func (w *FakeRespWriter) TsigStatus() error {
-	return nil
-}
-
-func (w *FakeRespWriter) TsigTimersOnly(bool) {
-	return
-}
-
-func (w *FakeRespWriter) Hijack() {
-	return
-}
+func (w *FakeRespWriter) Close() error        { return nil }
+func (w *FakeRespWriter) TsigStatus() error   { return nil }
+func (w *FakeRespWriter) TsigTimersOnly(bool) {}
+func (w *FakeRespWriter) Hijack()             {}

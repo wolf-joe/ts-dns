@@ -6,18 +6,6 @@ import (
 	"testing"
 )
 
-func TestExtractA(t *testing.T) {
-	assert.Empty(t, ExtractA(nil))
-	r := &dns.Msg{}
-	assert.Empty(t, ExtractA(r))
-	r.Answer = append(r.Answer, &dns.AAAA{})
-	assert.Empty(t, ExtractA(r))
-	r.Answer = append(r.Answer, &dns.A{})
-	assert.Equal(t, len(ExtractA(r)), 1)
-	r.Answer = append(r.Answer, &dns.TXT{})
-	assert.Equal(t, len(ExtractA(r)), 1)
-}
-
 func TestParseECS(t *testing.T) {
 	ecs, err := ParseECS("")
 	assert.Nil(t, ecs)

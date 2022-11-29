@@ -54,6 +54,6 @@ func FastestPingIP(ipAddr []string, tcpPort int, timeout time.Duration,
 	if fastestIP == "" {
 		return "", 0, errors.New("timeout")
 	}
-	cost := time.Now().Sub(begin).Milliseconds()
+	cost := time.Since(begin).Milliseconds()
 	return fastestIP, cost, nil
 }

@@ -407,7 +407,7 @@ func (g *groupImpl) Start(resolver dns.Handler) {
 		for {
 			select {
 			case <-tick.C:
-				if time.Now().Sub(lastSuccess).Hours() < 1 {
+				if time.Since(lastSuccess).Hours() < 1 {
 					// every hour
 					continue
 				}

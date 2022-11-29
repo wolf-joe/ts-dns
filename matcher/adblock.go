@@ -98,7 +98,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 
 		domain := extractDomain(line) // 提取规则中的域名
 		// 判断域名中是否有通配符
-		if strings.Index(domain, "*") != -1 {
+		if strings.Contains(domain, "*") {
 			// 通配符表达式转正则表达式
 			regStr := strings.Replace(domain, ".", "\\.", -1)
 			regStr = strings.Replace(regStr, "*", ".*", -1)

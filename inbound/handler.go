@@ -170,7 +170,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 	begin := time.Now()
 	defer func() {
 		fields := logrus.Fields{
-			"cost":   strconv.FormatInt(time.Now().Sub(begin).Milliseconds(), 10) + "ms",
+			"cost":   strconv.FormatInt(time.Since(begin).Milliseconds(), 10) + "ms",
 			"remote": writer.RemoteAddr().String(),
 		}
 		if _info.blocked {

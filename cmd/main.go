@@ -86,21 +86,19 @@ func main() {
 
 func reloadConf(ch chan os.Signal, filename *string, handler inbound.IHandler) {
 	for {
-		select {
-		case <-ch:
-			conf := new(config.Conf)
-			if _, err := toml.DecodeFile(*filename, conf); err != nil {
-				logrus.Warnf("load config file %q failed: %+v", *filename, err)
-				continue
-			}
-			buf := bytes.NewBuffer(nil)
-			_ = toml.NewEncoder(buf).Encode(conf)
-			logrus.Debugf("reload config: %s", buf)
-			if err := handler.ReloadConfig(conf); err != nil {
-				logrus.Warnf("reload config failed: %+v", err)
-				continue
-			}
-			logrus.Infof("reload config success")
+		<-ch
+		conf := new(config.Conf)
+		if _, err := toml.DecodeFile(*filename, conf); err != nil {
+			logrus.Warnf("load config file %q failed: %+v", *filename, err)
+			continue
 		}
+		buf := bytes.NewBuffer(nil)
+		_ = toml.NewEncoder(buf).Encode(conf)
+		logrus.Debugf("reload config: %s", buf)
+		if err := handler.ReloadConfig(conf); err != nil {
+			logrus.Warnf("reload config failed: %+v", err)
+			continue
+		}
+		logrus.Infof("reload config success")
 	}
 }
