@@ -6,46 +6,46 @@ import (
 	"github.com/miekg/dns"
 )
 
-type fakeRespWriter struct {
+type FakeRespWriter struct {
 	Msg   *dns.Msg
 	Bytes []byte
 }
 
 // NewFakeRespWriter 创建一个FakeRespWriter，用于手动请求dns.Handler时获取DNS响应
-func NewFakeRespWriter() *fakeRespWriter {
-	return &fakeRespWriter{}
+func NewFakeRespWriter() *FakeRespWriter {
+	return &FakeRespWriter{}
 }
 
-func (w *fakeRespWriter) LocalAddr() net.Addr {
+func (w *FakeRespWriter) LocalAddr() net.Addr {
 	return &net.IPAddr{IP: []byte{127, 0, 0, 1}}
 }
 
-func (w *fakeRespWriter) RemoteAddr() net.Addr {
+func (w *FakeRespWriter) RemoteAddr() net.Addr {
 	return &net.IPAddr{IP: []byte{127, 0, 0, 1}}
 }
 
-func (w *fakeRespWriter) WriteMsg(msg *dns.Msg) error {
+func (w *FakeRespWriter) WriteMsg(msg *dns.Msg) error {
 	w.Msg = msg
 	return nil
 }
 
-func (w *fakeRespWriter) Write(bytes []byte) (int, error) {
+func (w *FakeRespWriter) Write(bytes []byte) (int, error) {
 	w.Bytes = bytes
 	return len(bytes), nil
 }
 
-func (w *fakeRespWriter) Close() error {
+func (w *FakeRespWriter) Close() error {
 	return nil
 }
 
-func (w *fakeRespWriter) TsigStatus() error {
+func (w *FakeRespWriter) TsigStatus() error {
 	return nil
 }
 
-func (w *fakeRespWriter) TsigTimersOnly(bool) {
+func (w *FakeRespWriter) TsigTimersOnly(bool) {
 	return
 }
 
-func (w *fakeRespWriter) Hijack() {
+func (w *FakeRespWriter) Hijack() {
 	return
 }
