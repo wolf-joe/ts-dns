@@ -143,8 +143,7 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	}
 	name := caller.host + "."
 	if srcReq != nil && len(srcReq.Question) > 0 && srcReq.Question[0].Name == name {
-		// todo log
-		//utils.CtxError(caller.ctx, "%s resolve recursive", caller)
+		logrus.Errorf("%s resolve recursive", caller)
 		return // 可能是回环解析：DoHCaller想通过ts-dns解析自身域名，但ts-dns将请求转发回DoHCaller
 	}
 	// 模拟dns请求
