@@ -156,6 +156,8 @@ func (c *dnsCache) Set(req *dns.Msg, resp *dns.Msg) {
 }
 
 func (c *dnsCache) Start(_cleanTick ...time.Duration) {
+	c.stopCh = make(chan struct{})
+	c.stopped = make(chan struct{})
 	go func() {
 		cleanTick := time.Minute
 		if len(_cleanTick) > 0 {

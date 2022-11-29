@@ -34,7 +34,15 @@ func TestNewDNSCache(t *testing.T) {
 	c.Set(req, resp)
 	assert.NotNil(t, c.Get(req))
 	t.Log(c.Get(req))
-	// expired
+	// expired by clean goroutine
+	time.Sleep(time.Second * 2)
+	assert.Nil(t, c.Get(req))
+
+	c.Stop()
+	c.Start(time.Minute)
+	// expired by get
+	c.Set(req, resp)
+	assert.NotNil(t, c.Get(req))
 	time.Sleep(time.Second * 2)
 	assert.Nil(t, c.Get(req))
 }
