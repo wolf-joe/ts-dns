@@ -20,8 +20,12 @@
 * 支持hosts/DNS缓存/屏蔽指定查询类型
 * 支持热重载配置文件
 
-## 设计架构
-todo
+## 解析流程
+![arch.drawio.svg](doc/arch.drawio.svg)
+
+```
+查找hosts -> 查找缓存 -> 匹配规则 -> 指定group处理 -> 重定向 -> 设置缓存
+```
 
 ## 使用说明
 
