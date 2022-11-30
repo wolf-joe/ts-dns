@@ -3,9 +3,6 @@
 
 listen = ":53"
 
-[hosts]
-"google.com" = "1.1.1.1"
-
 [groups]
   [groups.clean]
   dns = ["223.5.5.5", "114.114.114.114"]

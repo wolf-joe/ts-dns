@@ -6,28 +6,22 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/wolf-joe/ts-dns)](https://goreportcard.com/report/github.com/wolf-joe/ts-dns)
 ![GitHub](https://img.shields.io/github/license/wolf-joe/ts-dns)
 
-> 简单易用的DNS分组/转发器
+> 灵活快速的DNS分组转发器
 
-## 基本特性
+## 设计目标
+### 灵活解析
+* 支持按ABP风格规则/`GFWList`对DNS请求进行分组
+* 支持按CIDR对DNS请求进行重定向
+* 支持DNS over UDP/TCP/TLS/HTTPS、socks5代理、ECS
+* 支持将查询结果中的IPv4地址添加至IPSet
+### 快速解析
+* 支持并发请求上游DNS，选择最快响应
+* 选择ping值最低的IPv4地址（tcp/icmp ping）
+* 支持hosts/DNS缓存/屏蔽指定查询类型
+* 支持热重载配置文件
 
-* 默认基于`CN IP列表` + `GFWList`进行域名分组；
-* 支持DNS over UDP/TCP/TLS/HTTPS、非标准端口DNS；
-* 支持选择ping值最低的IPv4地址（tcp/icmp ping）；
-* 支持并发请求/socks5代理请求上游DNS，支持附带指定ECS信息；
-* 支持多Hosts文件 + 自定义Hosts、通配符Hosts；
-* 支持配置文件自动重载，支持监听TCP/UDP端口；
-* 支持DNS查询缓存（IP乱序、TTL倒计时、ECS）；
-* 支持屏蔽指定查询类型；
-* 支持将查询结果中的IPv4地址添加至IPSet。
-
-## DNS查询请求处理流程
-
-1. 当域名匹配指定规则（配置文件里各组的`rules`）时，将请求转发至对应组上游DNS并直接返回；
-2. 如未匹配规则，则假设域名为`clean`组，向`clean`组的上游DNS转发查询请求，并做如下判断：
-   * 如果查询结果中所有IPv4地址均为`CN IP`，则直接返回；
-   * 如果查询结果中出现非`CN IP`，进一步判断：
-      * 如果该域名匹配GFWList列表，则向`dirty`组的上游DNS转发查询请求并返回；
-      * 否则返回查询结果。
+## 设计架构
+todo
 
 ## 使用说明
 
@@ -36,8 +30,8 @@
   ```shell
   # ./ts-dns -h  # 显示命令行帮助信息
   # ./ts-dns -c ts-dns.toml  # 指定配置文件名
-  # ./ts-dns -r  # 自动重载配置文件
   ./ts-dns
+  kill -SIGHUP <PID> # 重载配置文件
   ```
 
 ## 配置示例
@@ -47,8 +41,6 @@
 1. 默认配置（`ts-dns.toml`），开箱即用
   ```toml
   listen = ":53"
-  gfwlist = "gfwlist.txt"
-  cnip = "cnip.txt"
 
   [groups]
     [groups.clean]
@@ -56,7 +48,8 @@
     concurrent = true
 
     [groups.dirty]
-    dns = [""]  # 省略
+    dns = [""] # 省略
+    gfwlist_file = "gfwlist.txt"
   ```
 
 2. 选择ping值最低的IPv4地址（启用时建议以root权限运行本程序）
@@ -112,9 +105,12 @@
   ```
 
 
-## TODO
+## 未来规划
 
-* 设置fallback DNS
+- [ ] 支持定期拉取最新gfwlist
+- [ ] 支持http接口管理
+- [ ] 降低gfwlist的匹配优先级
+- [ ] DoT/GFWList域名解析自闭环
 
 ## 特别鸣谢
 * [github.com/arloan/prdns](https://github.com/arloan/prdns)
