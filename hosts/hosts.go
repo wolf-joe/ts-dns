@@ -1,143 +1,162 @@
 package hosts
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
+	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/ts-dns/config"
 	"net"
+	"os"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
+	"unicode"
 )
 
-const (
-	minReloadTick = time.Second // 当reloadTick低于该值时不自动重载hosts
-)
+// region interface
 
-// Reader Hosts读取器
-type Reader interface {
-	IP(hostname string, ipv6 bool) string
-	Record(hostname string, ipv6 bool) string
+type IDNSHosts interface {
+	Get(req *dns.Msg) *dns.Msg
 }
 
-// TextReader 基于文本的读取器
-type TextReader struct {
-	v4Map map[string]string
-	v4Reg map[*regexp.Regexp]string
-	v6Map map[string]string
-	v6Reg map[*regexp.Regexp]string
-}
-
-// IP 获取hostname对应的ip地址，如不存在则返回空串
-func (r *TextReader) IP(hostname string, ipv6 bool) string {
-	hostname = strings.ToLower(hostname)
-	hostMap, regMap := r.v4Map, r.v4Reg
-	if ipv6 {
-		hostMap, regMap = r.v6Map, r.v6Reg
+func NewDNSHosts(conf config.Conf) (IDNSHosts, error) {
+	domainMap := make(map[string]ipInfo, len(conf.Hosts))
+	regexMap := make(map[*regexp.Regexp]ipInfo, len(conf.Hosts))
+	load := func(host, ipStr string) error {
+		ip := buildIPInfo(ipStr)
+		if ip == zeroIP {
+			return fmt.Errorf("parse %q to ip failed", ipStr)
+		}
+		if !strings.ContainsAny(host, "*?") {
+			domainMap[host] = ip
+			return nil
+		}
+		// wildcard to regexp
+		host = strings.Replace(host, ".", "\\.", -1)
+		host = strings.Replace(host, "*", ".*", -1)
+		host = strings.Replace(host, "?", ".", -1)
+		reg, err := regexp.Compile("^" + host + "$")
+		if err != nil {
+			return fmt.Errorf("build host regexp %q failed: %w", host, err)
+		}
+		regexMap[reg] = ip
+		return nil
 	}
-	if val, ok := hostMap[hostname]; ok {
-		return val
-	}
-	for regex, val := range regMap {
-		if regex.MatchString(hostname) {
-			return val
+	// parse hosts
+	for host, ipStr := range conf.Hosts {
+		if err := load(host, ipStr); err != nil {
+			return nil, err
 		}
 	}
-	return ""
-}
-
-// Record 生成hostname对应的dns记录，格式为"hostname ttl IN A ip"，如不存在则返回空串
-func (r *TextReader) Record(hostname string, ipv6 bool) (record string) {
-	ip, t := r.IP(hostname, ipv6), "A"
-	if ipv6 {
-		t = "AAAA"
-	}
-	if ip == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s 0 IN %s %s", hostname, t, ip)
-}
-
-// NewReaderByText 解析文本内容中的Hosts
-func NewReaderByText(text string) (r *TextReader) {
-	r = &TextReader{v4Map: map[string]string{}, v4Reg: map[*regexp.Regexp]string{},
-		v6Map: map[string]string{}, v6Reg: map[*regexp.Regexp]string{}}
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.Trim(line, " \t\r")
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+	// parse hosts files
+	files := make([]*os.File, 0, len(conf.HostsFiles))
+	defer func() {
+		for _, f := range files {
+			_ = f.Close()
 		}
-		splitter := func(r rune) bool { return r == ' ' || r == '\t' }
-		if arr := strings.FieldsFunc(line, splitter); len(arr) >= 2 {
-			ip, hostname := net.ParseIP(arr[0]), arr[1]
-			var regex *regexp.Regexp
-			if strings.ContainsRune(hostname, '*') {
-				hostname = strings.Replace(hostname, ".", "\\.", -1)
-				hostname = strings.Replace(hostname, "*", ".*", -1)
-				regex = regexp.MustCompile("^" + hostname + "$")
+	}()
+	for _, filename := range conf.HostsFiles {
+		logrus.Debugf("load hosts file %q", filename)
+		file, err := os.Open(filename)
+		if err != nil {
+			return nil, fmt.Errorf("load hosts file %q error: %w", filename, err)
+		}
+		files = append(files, file)
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			// parse each line
+			line := strings.TrimSpace(scanner.Text())
+			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+				continue // ignore comment
 			}
-			if ip.To4() != nil {
-				if regex != nil {
-					r.v4Reg[regex] = ip.To4().String()
-				} else {
-					r.v4Map[hostname] = ip.To4().String()
-				}
-			} else if ip.To16() != nil {
-				if regex != nil {
-					r.v6Reg[regex] = ip.To16().String()
-				} else {
-					r.v6Map[hostname] = ip.To16().String()
-				}
+			parts := strings.FieldsFunc(line, unicode.IsSpace)
+			if len(parts) < 2 {
+				continue
+			}
+			if err = load(parts[0], parts[1]); err != nil {
+				return nil, fmt.Errorf("load hosts file %q error: %w", filename, err)
 			}
 		}
 	}
-	return
+	return &HostReader{
+		domainMap: domainMap,
+		regexMap:  regexMap,
+	}, nil
 }
 
-// FileReader 基于文件的读取器
-type FileReader struct {
-	mux        *sync.Mutex
-	filename   string
-	timestamp  time.Time
-	reloadTick time.Duration
-	reader     *TextReader
+// endregion
+
+// region impl
+var (
+	zeroIP           = ipInfo{}
+	_      IDNSHosts = &HostReader{}
+)
+
+type ipInfo struct {
+	val   string
+	_type uint16
 }
 
-func (r *FileReader) reload() {
-	r.mux.Lock()
-	defer r.mux.Unlock()
-	if r.reloadTick < minReloadTick || time.Now().Before(r.timestamp.Add(r.reloadTick)) {
-		return
+func (i ipInfo) Record(host string) string {
+	if i._type == dns.TypeA {
+		return host + " 0 IN A " + i.val
 	}
-	// read host file again
-	nr, err := NewReaderByFile(r.filename, r.reloadTick)
-	// 当hosts文件读取失败时不更新内存中已有hosts记录
-	if err == nil {
-		r.reader = nr.reader
+	return host + " 0 IN AAAA " + i.val
+}
+
+func buildIPInfo(val string) ipInfo {
+	ip := net.ParseIP(val)
+	if ip.To4() != nil {
+		return ipInfo{val: val, _type: dns.TypeA}
+	} else if ip.To16() != nil {
+		return ipInfo{val: val, _type: dns.TypeAAAA}
 	}
-	r.timestamp = time.Now()
+	return zeroIP
 }
 
-// IP 获取hostname对应的ip地址，如不存在则返回空串
-func (r *FileReader) IP(hostname string, ipv6 bool) string {
-	r.reload()
-	return r.reader.IP(hostname, ipv6)
+// HostReader 管理hosts
+type HostReader struct {
+	domainMap map[string]ipInfo
+	regexMap  map[*regexp.Regexp]ipInfo
 }
 
-// Record 生成hostname对应的dns记录，格式为"hostname ttl IN A ip"，如不存在则返回空串
-func (r *FileReader) Record(hostname string, ipv6 bool) string {
-	r.reload()
-	return r.reader.Record(hostname, ipv6)
-}
-
-// NewReaderByFile 解析目标文件内容中的Hosts
-func NewReaderByFile(filename string, reloadTick time.Duration) (r *FileReader, err error) {
-	var raw []byte
-	if raw, err = ioutil.ReadFile(filename); err != nil {
-		return
+func (h *HostReader) Get(req *dns.Msg) *dns.Msg {
+	if len(req.Question) == 0 {
+		return nil
 	}
-	r = &FileReader{mux: new(sync.Mutex), filename: filename, reloadTick: reloadTick}
-	r.reader = NewReaderByText(string(raw))
-	r.timestamp = time.Now()
-	return
+	// todo dns大小写不敏感
+	host, qType := strings.ToLower(req.Question[0].Name), req.Question[0].Qtype
+	if qType != dns.TypeA && qType != dns.TypeAAAA {
+		return nil
+	}
+
+	getIP := func(host string) (ipInfo, bool) {
+		if res, exists := h.domainMap[host]; exists {
+			return res, true
+		}
+		for reg, res := range h.regexMap {
+			if reg.MatchString(host) {
+				return res, true
+			}
+		}
+		return zeroIP, false
+	}
+	ip, exists := getIP(host)
+	if !exists && strings.HasSuffix(host, ".") {
+		ip, exists = getIP(host[:len(host)-1])
+	}
+	if !exists || ip._type != qType {
+		return nil
+	}
+	rr, err := dns.NewRR(ip.Record(host))
+	if err != nil {
+		logrus.Errorf("build dns rr failed: %+v", err)
+		return nil
+	}
+	resp := new(dns.Msg)
+	resp.SetReply(req)
+	resp.Answer = append(resp.Answer, rr)
+	return resp
 }
+
+// endregion

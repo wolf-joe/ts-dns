@@ -1,60 +1,101 @@
 package hosts
 
 import (
+	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"os"
+	"github.com/wolf-joe/ts-dns/config"
 	"testing"
-	"time"
 )
 
-func TestNewTextReader(t *testing.T) {
-	content := "# comment\n\n 256.0.0.0 ne\n" +
-		" 127.0.0.1 localhost \n \n gggg::0 ip6-ne \n ::1 ip6-localhost "
-	reader := NewReaderByText(content)
-	assert.Equal(t, reader.IP("ne", false), "")
-	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
-	assert.Equal(t, reader.IP("ip6-ne", true), "")
-	assert.Equal(t, reader.IP("ip6-localhost", true), "::1")
-	assert.Equal(t, reader.Record("ne", false), "")
-	expect := "localhost 0 IN A 127.0.0.1"
-	assert.Equal(t, reader.Record("localhost", false), expect)
-	expect = "ip6-localhost 0 IN AAAA ::1"
-	assert.Equal(t, reader.Record("ip6-localhost", true), expect)
-
-	// 通配符hosts
-	content = "1.1.1.1 www.*.org \n ::1 *.cn"
-	reader = NewReaderByText(content)
-	assert.Equal(t, reader.IP("www.test.org", false), "1.1.1.1")
-	assert.Equal(t, reader.IP("m.test.org", false), "")
-	assert.Equal(t, reader.IP("test.cn", true), "::1")
-	assert.Equal(t, reader.IP("test.cn", false), "")
+func buildReq(host string, qType uint16) *dns.Msg {
+	msg := new(dns.Msg)
+	msg.Question = append(msg.Question, dns.Question{
+		Name:   host,
+		Qtype:  qType,
+		Qclass: 0,
+	})
+	return msg
 }
 
-func TestNewFileReader(t *testing.T) {
-	filename := "go_test_hosts_file"
-	reader, err := NewReaderByFile(filename, 0)
-	assert.True(t, reader == nil)
-	assert.NotEqual(t, err, nil)
+func TestNewHostReader(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	cfg := config.Conf{Hosts: map[string]string{
+		"z.cn": "1.1.1.1",
+	}, HostsFiles: []string{
+		"testdata/test.txt",
+	}}
+	r, err := NewDNSHosts(cfg)
+	assert.Nil(t, err)
+	assert.NotNil(t, r)
 
-	// 写入测试文件
-	content := "127.0.0.1 localhost\n::1 ip6-localhost"
-	_ = ioutil.WriteFile(filename, []byte(content), 0644)
-	reader, err = NewReaderByFile(filename, time.Second)
-	assert.Equal(t, err, nil)
-	assert.Equal(t, reader.IP("localhost", false), "127.0.0.1")
-	assert.Equal(t, reader.IP("ip6-localhost", true), "::1")
-	expect := "localhost 0 IN A 127.0.0.1"
-	assert.Equal(t, reader.Record("localhost", false), expect)
+	resp := r.Get(buildReq("z.cn.", dns.TypeA))
+	assert.NotNil(t, resp)
+	assert.Equal(t, "z.cn.\t0\tIN\tA\t1.1.1.1", resp.Answer[0].String())
 
-	content = "127.0.1.1 localhost\n::2 ip6-localhost"
-	_ = ioutil.WriteFile(filename, []byte(content), 0644)
-	// 1秒之后自动重载hosts
-	time.Sleep(time.Second)
-	assert.Equal(t, reader.IP("localhost", false), "127.0.1.1")
-	assert.Equal(t, reader.IP("ip6-localhost", true), "::2")
-	expect = "ip6-localhost 0 IN AAAA ::2"
-	assert.Equal(t, reader.Record("ip6-localhost", true), expect)
+	cases := []struct {
+		host  string
+		query uint16
+		isNil bool
+	}{
+		{"z.cn", dns.TypeA, false},
+		{"z.cn", dns.TypeAAAA, true},
+		{"comment1.com", dns.TypeA, true},
+		{"comment2.com", dns.TypeA, true},
+		{"space_suffix.com", dns.TypeA, false},
+		{"hello.wildcard1.com", dns.TypeA, false},
+		{"a.wildcard2.com", dns.TypeA, false},
+		{"v6.com", dns.TypeA, true},
+		{"v6.com", dns.TypeAAAA, false},
+	}
+	for _, c := range cases {
+		t.Log(c)
+		resp = r.Get(buildReq(c.host, c.query))
+		assert.Nil(t, err)
+		if c.isNil {
+			assert.Nil(t, resp)
+		} else {
+			assert.NotNil(t, resp)
+		}
+	}
 
-	_ = os.Remove(filename)
+	cfg = config.Conf{HostsFiles: []string{
+		"testdata/invalid.txt",
+	}}
+	_, err = NewDNSHosts(cfg)
+	t.Logf("%+v", err)
+	assert.NotNil(t, err)
+
+	cfg = config.Conf{HostsFiles: []string{
+		"testdata/not_exists.txt",
+	}}
+	_, err = NewDNSHosts(cfg)
+	t.Logf("%+v", err)
+	assert.NotNil(t, err)
+}
+
+func BenchmarkHostReader_Regexp(b *testing.B) {
+	hosts, err := NewDNSHosts(config.Conf{Hosts: map[string]string{
+		"z.cn":    "1.1.1.1",
+		"*.wd.cn": "1.1.1.1",
+	}})
+	assert.Nil(b, err)
+	req := buildReq("test.wd.cn", dns.TypeA)
+	for i := 0; i < b.N; i++ {
+		resp := hosts.Get(req)
+		assert.NotNil(b, resp)
+	}
+}
+
+func BenchmarkHostReader_Domain(b *testing.B) {
+	r, err := NewDNSHosts(config.Conf{Hosts: map[string]string{
+		"z.cn":    "1.1.1.1",
+		"*.wd.cn": "1.1.1.1",
+	}})
+	assert.Nil(b, err)
+	req := buildReq("z.cn", dns.TypeA)
+	for i := 0; i < b.N; i++ {
+		resp := r.Get(req)
+		assert.NotNil(b, resp)
+	}
 }

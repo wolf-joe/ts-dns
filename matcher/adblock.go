@@ -2,6 +2,7 @@ package matcher
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"regexp"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 // ABPlus 基于部分AdBlock Plus规则的域名匹配器
 type ABPlus struct {
-	DomainMatcher
 	isBlocked     map[string]bool
 	blockedRegs   []*regexp.Regexp
 	unblockedRegs []*regexp.Regexp
@@ -98,7 +98,7 @@ func NewABPByText(text string) (matcher *ABPlus) {
 
 		domain := extractDomain(line) // 提取规则中的域名
 		// 判断域名中是否有通配符
-		if strings.Index(domain, "*") != -1 {
+		if strings.Contains(domain, "*") {
 			// 通配符表达式转正则表达式
 			regStr := strings.Replace(domain, ".", "\\.", -1)
 			regStr = strings.Replace(regStr, "*", ".*", -1)
@@ -129,22 +129,19 @@ func NewABPByText(text string) (matcher *ABPlus) {
 }
 
 // NewABPByFile 从文件内容读取AdBlock Plus规则
-func NewABPByFile(filename string, b64decode bool) (checker *ABPlus, err error) {
-	if filename == "" {
-		return NewABPByText(""), nil
-	}
-	var raw []byte
-	var text string
-	if raw, err = ioutil.ReadFile(filename); err == nil {
-		text = string(raw)
-		if b64decode {
-			if raw, err = base64.StdEncoding.DecodeString(text); err == nil {
-				text = string(raw)
-			}
-		}
-	}
+func NewABPByFile(filename string, b64decode bool) (*ABPlus, error) {
+	raw, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file %q failed: %w", filename, err)
 	}
-	return NewABPByText(text), nil
+	if b64decode {
+		dst := make([]byte, len(raw))
+		var n int
+		n, err = base64.StdEncoding.Decode(dst, raw)
+		if err != nil {
+			return nil, fmt.Errorf("decode base64 failed: %w", err)
+		}
+		raw = dst[:n]
+	}
+	return NewABPByText(string(raw)), nil
 }

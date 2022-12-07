@@ -2,8 +2,6 @@
 # https://github.com/wolf-joe/ts-dns
 
 listen = ":53"
-gfwlist = "gfwlist.txt"
-cnip = "cnip.txt"
 
 [groups]
   [groups.clean]
@@ -12,3 +10,4 @@ cnip = "cnip.txt"
 
   [groups.dirty]
   dns = ["208.67.222.222:5353", "176.103.130.130:5353"]
+  gfwlist_file = "gfwlist.txt"

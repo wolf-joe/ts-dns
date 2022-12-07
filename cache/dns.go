@@ -1,53 +1,120 @@
 package cache
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
+	"fmt"
 	"github.com/miekg/dns"
 	"github.com/valyala/fastrand"
-	"github.com/wolf-joe/ts-dns/core/common"
+	"github.com/wolf-joe/ts-dns/config"
+	"github.com/wolf-joe/ts-dns/utils"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 const (
-	DefaultSize   = 4096           // DefaultSize 默认dns缓存大小
 	DefaultMinTTL = time.Minute    // DefaultMinTTL 默认dns缓存最小有效期
 	DefaultMaxTTL = 24 * time.Hour // DefaultMaxTTL 默认dns缓存最大有效期
 )
 
-// DNSCache DNS响应缓存器
-type DNSCache struct {
-	ttlMap *TTLMap
-	size   int
-	minTTL time.Duration
-	maxTTL time.Duration
+// IDNSCache cache dns response for dns request
+type IDNSCache interface {
+	// Get find cached response
+	Get(req *dns.Msg) *dns.Msg
+	// Set save response to cache
+	Set(req *dns.Msg, resp *dns.Msg)
+	// Start life cycle begin
+	Start(cleanTick ...time.Duration)
+	// Stop life cycle end
+	Stop()
 }
 
-// dns响应的包裹，用以实现动态ttl
-type cacheEntry struct {
-	r      *dns.Msg
-	expire time.Time
+func NewDNSCache(conf config.Conf) (IDNSCache, error) {
+	minTTL, maxTTL := DefaultMinTTL, DefaultMaxTTL
+	if conf.Cache.MinTTL > 0 {
+		minTTL = time.Second * time.Duration(conf.Cache.MinTTL)
+	}
+	if conf.Cache.MaxTTL > 0 {
+		maxTTL = time.Second * time.Duration(conf.Cache.MaxTTL)
+	}
+	if minTTL > maxTTL {
+		return nil, fmt.Errorf("min ttl(%d) larger than max ttl(%d)", conf.Cache.MinTTL, conf.Cache.MaxTTL)
+	}
+	c := &dnsCache{
+		items:   map[string]cacheItem{},
+		lock:    new(sync.RWMutex),
+		stopCh:  make(chan struct{}),
+		stopped: make(chan struct{}),
+		maxSize: conf.Cache.Size,
+		minTTL:  minTTL,
+		maxTTL:  maxTTL,
+	}
+	return c, nil
 }
 
-func (entry *cacheEntry) Get() *dns.Msg {
-	var ttl int64
-	if ttl = entry.expire.Unix() - time.Now().Unix(); ttl < 0 {
+var (
+	_ IDNSCache = &dnsCache{}
+)
+
+type cacheItem struct {
+	resp      *dns.Msg
+	expiredAt int64
+}
+
+type dnsCache struct {
+	items   map[string]cacheItem
+	lock    *sync.RWMutex
+	stopCh  chan struct{}
+	stopped chan struct{}
+
+	maxSize int
+	minTTL  time.Duration
+	maxTTL  time.Duration
+}
+
+func (c *dnsCache) cacheKey(req *dns.Msg) string {
+	question := req.Question[0]
+	key := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
+	if subnet := utils.FormatECS(req); subnet != "" {
+		key += "." + subnet
+	}
+	return strings.ToLower(key)
+}
+
+func (c *dnsCache) Get(req *dns.Msg) *dns.Msg {
+	if c.maxSize <= 0 {
 		return nil
 	}
-	r := entry.r.Copy()
-	for i := 0; i < len(r.Answer); i++ { // 倒计时ttl
+	// check cache
+	key := c.cacheKey(req)
+	c.lock.RLock()
+	item, exists := c.items[key]
+	c.lock.RUnlock()
+	if !exists {
+		return nil
+	}
+	// ttl countdown
+	ttl := item.expiredAt - time.Now().Unix()
+	if ttl <= 0 {
+		// remove expired item
+		c.lock.Lock()
+		delete(c.items, key)
+		c.lock.Unlock()
+		return nil
+	}
+	r := item.resp.Copy()
+	r.SetReply(req)
+	for i := 0; i < len(r.Answer); i++ {
 		r.Answer[i].Header().Ttl = uint32(ttl)
 	}
-	// 打乱ip响应顺序
+	// shuffle ip
 	first := uint32(len(r.Answer))
 	for ; first > 0; first-- {
 		if t := r.Answer[first-1].Header().Rrtype; t != dns.TypeA && t != dns.TypeAAAA {
 			break
 		}
 	}
-	ips := r.Answer[first:] // 切片不重新分配内存，修改ips相当于直接修改r.Answer
-	if len(ips) > 1 {
+	if ips := r.Answer[first:]; len(ips) > 1 {
 		for i := uint32(len(ips) - 1); i > 0; i-- {
 			j := fastrand.Uint32n(i + 1)
 			ips[i], ips[j] = ips[j], ips[i]
@@ -56,51 +123,68 @@ func (entry *cacheEntry) Get() *dns.Msg {
 	return r
 }
 
-// Get 获取DNS响应缓存，响应的ttl为倒计时形式
-func (cache *DNSCache) Get(request *dns.Msg) *dns.Msg {
-	question := request.Question[0]
-	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if subnet := common.FormatECS(request); subnet != "" {
-		cacheKey += "." + subnet
-	}
-	cacheKey = strings.ToLower(cacheKey)
-	if cacheHit, ok := cache.ttlMap.Get(cacheKey); ok {
-		r := cacheHit.(*cacheEntry).Get()
-		return r
-	}
-	return nil
-}
-
-// Set 设置DNS响应缓存，缓存的ttl由minTTL、maxTTL、响应本身的ttl共同决定
-func (cache *DNSCache) Set(request *dns.Msg, r *dns.Msg) {
-	question := request.Question[0]
-	if cache.ttlMap.Len() >= cache.size || r == nil || len(r.Answer) <= 0 {
+func (c *dnsCache) Set(req *dns.Msg, resp *dns.Msg) {
+	if c.maxSize <= 0 || resp == nil || len(resp.Answer) == 0 {
 		return
 	}
-	cacheKey := question.Name + strconv.FormatInt(int64(question.Qtype), 10)
-	if subnet := common.FormatECS(request); subnet != "" {
-		cacheKey += "." + subnet
+	// check size
+	c.lock.RLock()
+	length := len(c.items)
+	c.lock.RUnlock()
+	if length >= c.maxSize {
+		return
 	}
-	cacheKey = strings.ToLower(cacheKey)
-	var ex = cache.maxTTL
-	for _, answer := range r.Answer {
-		if ttl := time.Duration(answer.Header().Ttl) * time.Second; ttl < ex {
-			ex = ttl
+	// reset ttl
+	key := c.cacheKey(req)
+	var expire = c.maxTTL
+	for _, answer := range resp.Answer {
+		if ttl := time.Duration(answer.Header().Ttl) * time.Second; ttl < expire {
+			expire = ttl
 		}
 	}
-	if ex < cache.minTTL {
-		ex = cache.minTTL
+	if expire < c.minTTL {
+		expire = c.minTTL
 	}
-	for i := 0; i < len(r.Answer); i++ {
-		r.Answer[i].Header().Ttl = uint32(ex.Seconds())
+	for i := 0; i < len(resp.Answer); i++ {
+		resp.Answer[i].Header().Ttl = uint32(expire.Seconds())
 	}
-	entry := &cacheEntry{r: r, expire: time.Now().Add(ex)}
-	cache.ttlMap.Set(cacheKey, entry, ex)
+	// set cache
+	expiredAt := time.Now().Add(expire).Unix()
+	c.lock.Lock()
+	c.items[key] = cacheItem{resp: resp, expiredAt: expiredAt}
+	c.lock.Unlock()
 }
 
-// NewDNSCache 生成一个DNS响应缓存器实例。如果maxTTL为负数且minTTL也为负数，或size为负数，则缓存会立即失效
-func NewDNSCache(size int, minTTL, maxTTL time.Duration) (c *DNSCache) {
-	c = &DNSCache{size: size, minTTL: minTTL, maxTTL: maxTTL}
-	c.ttlMap = NewTTLMap(time.Minute)
-	return
+func (c *dnsCache) Start(_cleanTick ...time.Duration) {
+	c.stopCh = make(chan struct{})
+	c.stopped = make(chan struct{})
+	go func() {
+		cleanTick := time.Minute
+		if len(_cleanTick) > 0 {
+			cleanTick = _cleanTick[0]
+		}
+		tk := time.NewTicker(cleanTick)
+		for {
+			select {
+			case <-tk.C:
+				// clean expired key
+				c.lock.Lock()
+				for key, item := range c.items {
+					if time.Now().Unix() >= item.expiredAt {
+						delete(c.items, key)
+					}
+				}
+				c.lock.Unlock()
+			case <-c.stopCh:
+				tk.Stop()
+				close(c.stopped)
+				return
+			}
+		}
+	}()
+}
+
+func (c *dnsCache) Stop() {
+	close(c.stopCh)
+	<-c.stopped
 }

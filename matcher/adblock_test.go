@@ -22,24 +22,20 @@ unknown
 
 func TestNewChecker(t *testing.T) {
 	filename := "go_test_adblock.txt"
-	// 空文件名
-	matcher, err := NewABPByFile("", false)
-	assert.NotNil(t, matcher)
-	assert.Nil(t, err)
 	// 文件不存在
-	matcher, err = NewABPByFile(filename, false)
+	_, err := NewABPByFile(filename, false)
 	assert.NotEqual(t, err, nil)
 	// 写入不正确内容
 	content := base64.StdEncoding.EncodeToString([]byte(text)) + "???"
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
 	// 读取失败
-	matcher, err = NewABPByFile(filename, true)
+	_, err = NewABPByFile(filename, true)
 	assert.NotEqual(t, err, nil)
 	// 写入正确内容
 	content = base64.StdEncoding.EncodeToString([]byte(text))
 	_ = ioutil.WriteFile(filename, []byte(content), 0644)
 	// 读取成功
-	matcher, err = NewABPByFile(filename, true)
+	matcher, err := NewABPByFile(filename, true)
 	assert.NotEqual(t, matcher, nil)
 	assert.Equal(t, err, nil)
 	// 移除生成的文件
@@ -82,4 +78,12 @@ func TestABPlus_Extend(t *testing.T) {
 	matched, ok = matcher.Match("www.example.com")
 	assert.True(t, matched)
 	assert.True(t, ok)
+}
+
+func TestNewABPByFile(t *testing.T) {
+	matcher, err := NewABPByFile("testdata/gfwlist.txt", true)
+	assert.Nil(t, err)
+	matched, ok := matcher.Match("google.com")
+	assert.True(t, ok)
+	assert.True(t, matched)
 }

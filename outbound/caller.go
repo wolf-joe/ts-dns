@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/ts-dns/utils"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -16,16 +18,21 @@ import (
 
 	"github.com/miekg/dns"
 	"github.com/valyala/fastrand"
-	"github.com/wolf-joe/ts-dns/core/utils"
 	"golang.org/x/net/proxy"
 )
 
 // Caller 上游DNS请求基类
 type Caller interface {
 	Call(request *dns.Msg) (r *dns.Msg, err error)
+	Start(resolver dns.Handler)
 	Exit()
 	String() string
 }
+
+var (
+	_ Caller = &DNSCaller{}
+	_ Caller = &DoHCallerV2{}
+)
 
 // DNSCaller UDP/TCP/DOT请求类
 type DNSCaller struct {
@@ -34,6 +41,8 @@ type DNSCaller struct {
 	proxy  proxy.Dialer
 	conn   *dns.Conn
 }
+
+func (caller *DNSCaller) Start(_ dns.Handler) {}
 
 // Call 向目标上游DNS转发请求
 func (caller *DNSCaller) Call(request *dns.Msg) (r *dns.Msg, err error) {
@@ -84,7 +93,6 @@ type DoHCallerV2 struct {
 	host     string
 	port     string
 	url      string
-	ctx      context.Context
 	clients  []*http.Client
 	rwMux    sync.RWMutex
 	resolver dns.Handler
@@ -95,12 +103,17 @@ type DoHCallerV2 struct {
 	cancelCh  chan interface{} // stop run()
 }
 
+func (caller *DoHCallerV2) Start(resolver dns.Handler) {
+	caller.resolver = resolver
+	go caller.run(time.Hour*24, time.Second)
+}
+
 // 后台goroutine，负责定时/按需解析DoH服务器域名
-func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
-	utils.CtxDebug(caller.ctx, "%s run", caller)
+func (caller *DoHCallerV2) run(resolveCycle time.Duration, timeout time.Duration) {
+	tick := time.NewTicker(resolveCycle)
 	for {
 		select {
-		case <-tick:
+		case <-tick.C:
 			caller.rwMux.Lock()
 			caller.resolve(nil, timeout)
 			caller.rwMux.Unlock()
@@ -112,7 +125,7 @@ func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
 			caller.rwMux.Unlock()
 			caller.satisfyCh <- struct{}{} // 通知getClient()
 		case <-caller.cancelCh:
-			utils.CtxDebug(caller.ctx, "%s stopped", caller)
+			tick.Stop()
 			return
 		}
 	}
@@ -122,15 +135,15 @@ func (caller *DoHCallerV2) run(tick <-chan time.Time, timeout time.Duration) {
 func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	genClient := func(ip string) *http.Client {
 		return &http.Client{Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
-				addr = ip + ":" + caller.port // 重写addr
+			DialContext: func(ctx context.Context, network, _ string) (conn net.Conn, err error) {
+				addr := ip + ":" + caller.port // 重写addr
 				return caller.dialer.Dial(network, addr)
 			},
 		}}
 	}
-	name := strings.ToUpper(caller.host + ".")
+	name := caller.host + "."
 	if srcReq != nil && len(srcReq.Question) > 0 && srcReq.Question[0].Name == name {
-		utils.CtxError(caller.ctx, "%s resolve recursive", caller)
+		logrus.Errorf("%s resolve recursive", caller)
 		return // 可能是回环解析：DoHCaller想通过ts-dns解析自身域名，但ts-dns将请求转发回DoHCaller
 	}
 	// 模拟dns请求
@@ -149,7 +162,6 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	select {
 	case <-done:
 	case <-time.After(timeout):
-		utils.CtxWarn(caller.ctx, "%s resolve timeout", caller)
 		return // 超时直接结束
 	}
 	// 解析响应中的ipv4地址
@@ -166,9 +178,9 @@ func (caller *DoHCallerV2) resolve(srcReq *dns.Msg, timeout time.Duration) {
 	}
 	if len(clients) > 0 {
 		caller.clients = clients
-		utils.CtxDebug(caller.ctx, "%s resolve %s", caller, ips)
+		logrus.Debugf("%s resolve ip %s", caller, ips)
 	} else {
-		utils.CtxDebug(caller.ctx, "%s resolve failed", caller)
+		logrus.Warnf("%s resolve ip failed", caller)
 	}
 }
 
@@ -230,7 +242,9 @@ func (caller *DoHCallerV2) Call(request *dns.Msg) (r *dns.Msg, err error) {
 
 // Exit 停止后台goroutine。caller退出时行为
 func (caller *DoHCallerV2) Exit() {
+	logrus.Debugf("stop caller %s", caller)
 	caller.cancelCh <- struct{}{}
+	logrus.Debugf("stop caller %s success", caller)
 }
 
 // String 描述caller
@@ -244,7 +258,7 @@ func (caller *DoHCallerV2) SetResolver(resolver dns.Handler) {
 }
 
 // NewDoHCallerV2 创建一个DoHCaller，需要服务器url，可选代理
-func NewDoHCallerV2(ctx context.Context, rawURL string, dialer proxy.Dialer) (*DoHCallerV2, error) {
+func NewDoHCallerV2(rawURL string, dialer proxy.Dialer) (*DoHCallerV2, error) {
 	// 解析url
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -266,10 +280,9 @@ func NewDoHCallerV2(ctx context.Context, rawURL string, dialer proxy.Dialer) (*D
 		dialer = &net.Dialer{Timeout: time.Second * 3}
 	}
 	caller := &DoHCallerV2{host: host, port: port, url: u.String(),
-		rwMux: sync.RWMutex{}, dialer: dialer, ctx: ctx}
+		rwMux: sync.RWMutex{}, dialer: dialer}
 	caller.requireCh = make(chan *dns.Msg, 1)
 	caller.satisfyCh = make(chan interface{}, 1)
 	caller.cancelCh = make(chan interface{}, 1)
-	go caller.run(time.Tick(time.Hour*24), time.Second)
 	return caller, nil
 }

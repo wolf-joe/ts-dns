@@ -18,9 +18,8 @@ src/
 pkg/
 bin/
 dist/
-go.sum
 
 delegated-apnic-latest
 cnip.txt
-gfwlist*.txt
+/gfwlist*.txt
 coverage.txt

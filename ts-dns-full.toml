@@ -1,10 +1,7 @@
 # Telescope DNS Configure File
 # https://github.com/wolf-joe/ts-dns
 
-listen = ":53/udp"  # 监听端口，支持指定tcp/udp，不指定时默认同时监听tcp&udp
-gfwlist = "gfwlist.txt"  # gfwlist文件路径，release包中已预下载。官方地址：https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt
-gfwlist_b64 = true  # 是否使用base64解码gfwlist文件，默认为true
-cnip = "cnip.txt"  # 中国ip网段列表，用于辅助域名分组
+listen = ":53/udp"  # 监听地址，支持tcp/udp后缀，无后缀则同时监听tcp&udp。推荐使用命令行参数代替
 disable_qtypes = ["AAAA", "HTTPS"]  # 屏蔽IPv6/HTTPS查询
 
 hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
@@ -13,30 +10,30 @@ hosts_files = ["/etc/hosts"]  # hosts文件路径，支持多hosts
 "*.example.com" = "8.8.8.8"  # 通配符Hosts
 "cloudflare-dns.com" = "1.0.0.1"  # 防止下文提到的DoH回环解析
 
-[query_log]
-file = "/dev/null"  # dns请求日志文件，值为/dev/null时不记录，值为空时记录到stdout
-ignore_qtypes = ["DNSKEY", "NS"]  # 不记录指定类型的dns请求，默认为空
-ignore_cache = true  # 不记录命中缓存的dns请求，默认为false
-ignore_hosts = true  # 不记录命中hosts的dns请求，默认为false
-
 [cache]  # dns缓存配置
-size = 4096  # 缓存大小，为负数时禁用缓存
+size = 4096  # 缓存大小，为非正数时禁用缓存
 min_ttl = 60  # 最小ttl，单位为秒
 max_ttl = 86400  # 最大ttl，单位为秒
 
 [groups] # 对域名进行分组
-  [groups.clean]  # 必选分组，默认域名所在分组
+  [groups.clean]
+  rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
+  rules_file = "rules.txt"  # 规则文件，每行一个规则
+  fallback = true # 设置为兜底域名组
+
   ecs = "1.2.4.0/24"  # edns-client-subnet信息，配置后转发DNS请求时默认附带（已有ecs时不覆盖），暂不支持doh
   no_cookie = false  # 禁用edns cookie，默认false，dnspod(119.29.29.29)等特殊服务器需要设置为true
   dns = ["223.5.5.5:53", "114.114.114.114/tcp"]  # DNS服务器列表，默认使用53端口
   concurrent = true  # 并发请求dns服务器列表
-  rules = ["qq.com", ".baidu.com", "*.taobao.com"]  # "qq.com"规则可匹配"test.qq.com"、"qq.com"两种域名，".qq.com"和"*.qq.com"规则无法匹配"qq.com"
-  rules_file = "rules.txt"  # 规则文件，每行一个规则
 
   fastest_v4 = true  # 选择ping值最低的ipv4地址作为响应，启用且使用icmp ping时建议以root权限允许本程序
   tcp_ping_port = 80  # 当启用fastest_v4时，如该值大于0则使用tcp ping，小于等于0则使用icmp ping
 
-  [groups.dirty]  # 必选分组，匹配GFWList的域名会归类到该组
+  redirector = "oversea_ip2dirty" # 解析后判断是否需要重定向
+
+  [groups.dirty]
+  gfwlist_file = "gfwlist.txt" # 匹配到gfwlist规则时使用该组
+
   socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析
   dns = ["8.8.8.8", "1.1.1.1"]  # 如不想用socks5代理解析时推荐使用国外非53端口dns
   dot = ["1.0.0.1:853@cloudflare-dns.com"]  # dns over tls服务器
@@ -52,3 +49,10 @@ max_ttl = 86400  # 最大ttl，单位为秒
   [groups.work]
   dns = ["10.1.1.1"]
   rules = ["company.com"]
+
+[redirectors]
+  [redirectors.oversea_ip2dirty]
+  # 解析后如发现ip地址不匹配cnip，则重定向到dirty组解析
+  type = "mismatch_cidr"
+  rules_file = "cnip.txt"
+  dst_group = "dirty"
