@@ -3,14 +3,15 @@ package redirector
 import (
 	"bufio"
 	"fmt"
+	"net"
+	"os"
+	"strings"
+
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/ts-dns/config"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"github.com/yl2chen/cidranger"
-	"net"
-	"os"
-	"strings"
 )
 
 const (
@@ -49,7 +50,7 @@ func NewRedirector(globalConf config.Conf, groups map[string]outbound.IGroup) (R
 	// return runtime redirector
 	redirector := func(src outbound.IGroup, req, resp *dns.Msg) outbound.IGroup {
 		instance, exists := group2redir[src.Name()]
-		if !exists {
+		if resp == nil || !exists {
 			return nil
 		}
 		newGroup := instance.Redirect(req, resp)

@@ -241,7 +241,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 	_info.matched = matched
 
 	// redirect
-	if resp != nil && h.redirector != nil {
+	if h.redirector != nil {
 		if group := h.redirector(matched, req, resp); group != nil {
 			matched = group
 			resp = group.Handle(req)
