@@ -3,6 +3,12 @@ package inbound
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/ts-dns/cache"
@@ -10,11 +16,6 @@ import (
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"github.com/wolf-joe/ts-dns/redirector"
-	"strconv"
-	"strings"
-	"sync/atomic"
-	"time"
-	"unsafe"
 )
 
 // region interface
@@ -240,7 +241,7 @@ func (h *handlerImpl) handle(writer dns.ResponseWriter, req *dns.Msg) (resp *dns
 	_info.matched = matched
 
 	// redirect
-	if h.redirector != nil {
+	if resp != nil && h.redirector != nil {
 		if group := h.redirector(matched, req, resp); group != nil {
 			matched = group
 			resp = group.Handle(req)
