@@ -3,6 +3,12 @@ package inbound
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+	"unsafe"
+
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/wolf-joe/ts-dns/cache"
@@ -10,11 +16,6 @@ import (
 	"github.com/wolf-joe/ts-dns/hosts"
 	"github.com/wolf-joe/ts-dns/outbound"
 	"github.com/wolf-joe/ts-dns/redirector"
-	"strconv"
-	"strings"
-	"sync/atomic"
-	"time"
-	"unsafe"
 )
 
 // region interface
