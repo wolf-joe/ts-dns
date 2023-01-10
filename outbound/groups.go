@@ -5,13 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/miekg/dns"
-	"github.com/sirupsen/logrus"
-	"github.com/wolf-joe/go-ipset/ipset"
-	"github.com/wolf-joe/ts-dns/config"
-	"github.com/wolf-joe/ts-dns/matcher"
-	"github.com/wolf-joe/ts-dns/utils"
-	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -19,6 +12,14 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/go-ipset/ipset"
+	"github.com/wolf-joe/ts-dns/config"
+	"github.com/wolf-joe/ts-dns/matcher"
+	"github.com/wolf-joe/ts-dns/utils"
+	"golang.org/x/net/proxy"
 )
 
 type IGroup interface {
@@ -55,22 +56,35 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 			seenGFWList = true
 		}
 		g := &groupImpl{
-			name:        name,
-			fallback:    conf.Fallback,
-			matcher:     nil,
-			gfwList:     nil,
-			gfwListURL:  conf.GFWListURL,
-			noCookie:    conf.NoCookie,
-			withECS:     nil,
-			callers:     nil,
-			concurrent:  conf.Concurrent,
-			proxy:       nil,
-			fastestIP:   conf.FastestV4,
-			tcpPingPort: conf.TCPPingPort,
-			ipSet:       nil,
-			stopCh:      make(chan struct{}),
-			stopped:     make(chan struct{}),
+			name:          name,
+			fallback:      conf.Fallback,
+			matcher:       nil,
+			gfwList:       nil,
+			gfwListURL:    conf.GFWListURL,
+			noCookie:      conf.NoCookie,
+			withECS:       nil,
+			callers:       nil,
+			concurrent:    conf.Concurrent,
+			proxy:         nil,
+			fastestIP:     conf.FastestV4,
+			tcpPingPort:   conf.TCPPingPort,
+			ipSet:         nil,
+			stopCh:        make(chan struct{}),
+			stopped:       make(chan struct{}),
+			disableQTypes: map[uint16]bool{},
 		}
+		// disable query types
+		if conf.DisableIPv6 {
+			g.disableQTypes[dns.TypeAAAA] = true
+		}
+		for _, qTypeStr := range conf.DisableQTypes {
+			qTypeStr = strings.ToUpper(qTypeStr)
+			if _, exists := dns.StringToType[qTypeStr]; !exists {
+				return nil, fmt.Errorf("unknown query type: %q", qTypeStr)
+			}
+			g.disableQTypes[dns.StringToType[qTypeStr]] = true
+		}
+
 		// read rules
 		text := strings.Join(conf.Rules, "\n")
 		g.matcher = matcher.NewABPByText(text)
@@ -165,9 +179,10 @@ type groupImpl struct {
 	name     string
 	fallback bool
 
-	matcher    *matcher.ABPlus
-	gfwList    unsafe.Pointer // type: *matcher.ABPlus
-	gfwListURL string
+	disableQTypes map[uint16]bool
+	matcher       *matcher.ABPlus
+	gfwList       unsafe.Pointer // type: *matcher.ABPlus
+	gfwListURL    string
 
 	noCookie bool              // 是否删除请求中的cookie
 	withECS  *dns.EDNS0_SUBNET // 是否在请求中附加ECS信息
@@ -210,6 +225,11 @@ func (g *groupImpl) Match(req *dns.Msg) bool {
 }
 
 func (g *groupImpl) Handle(req *dns.Msg) *dns.Msg {
+	for _, question := range req.Question {
+		if g.disableQTypes[question.Qtype] {
+			return nil // disabled
+		}
+	}
 	// 预处理请求
 	if g.noCookie || g.withECS != nil {
 		req = req.Copy()

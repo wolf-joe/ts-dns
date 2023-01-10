@@ -1,9 +1,11 @@
 package outbound
 
 import (
+	"testing"
+
+	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/config"
-	"testing"
 )
 
 func TestBuildGroups(t *testing.T) {
@@ -45,4 +47,21 @@ func TestBuildGroups(t *testing.T) {
 		assert.NotNil(t, err)
 		t.Log(err)
 	})
+}
+
+func TestDisableIPv6(t *testing.T) {
+	groups, err := BuildGroups(config.Conf{Groups: map[string]config.Group{
+		"g1": {DisableIPv6: true, DisableQTypes: []string{"AAAA"}},
+	}})
+	assert.Nil(t, err)
+	g := groups["g1"]
+	assert.NotNil(t, g)
+	resp := g.Handle(&dns.Msg{
+		Question: []dns.Question{{
+			Name:   "z.cn.",
+			Qtype:  dns.TypeAAAA,
+			Qclass: 0,
+		}},
+	})
+	assert.Nil(t, resp)
 }
