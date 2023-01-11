@@ -32,6 +32,8 @@ max_ttl = 86400  # 最大ttl，单位为秒
   redirector = "oversea_ip2dirty" # 解析后判断是否需要重定向
 
   [groups.dirty]
+  disable_qtypes = ["AAAA", "HTTPS"]  # 对指定组单独屏蔽IPv6/HTTPS查询
+
   gfwlist_file = "gfwlist.txt" # 匹配到gfwlist规则时使用该组
 
   socks5 = "127.0.0.1:1080"  # 当使用国外53端口dns解析时推荐用socks5代理解析

@@ -22,8 +22,10 @@ type CacheConf struct {
 
 // Group 配置文件中每个groups section对应的结构
 type Group struct {
-	ECS      string `toml:"ecs"`
-	NoCookie bool   `toml:"no_cookie"`
+	DisableIPv6   bool     `toml:"disable_ipv6"`
+	DisableQTypes []string `toml:"disable_qtypes"`
+	ECS           string   `toml:"ecs"`
+	NoCookie      bool     `toml:"no_cookie"`
 
 	Rules       []string `toml:"rules"`
 	RulesFile   string   `toml:"rules_file"`
