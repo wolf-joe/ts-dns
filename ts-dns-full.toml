@@ -44,6 +44,7 @@ max_ttl = 86400  # 最大ttl，单位为秒
 
   # 警告：进程启动时会覆盖已有同名IPSet
   ipset = "blocked"  # 目标IPSet名称，该组所有域名的ipv4解析结果将加入到该IPSet中
+  ipset6 = "blocked6"  # 目标IPSet名称，该组所有域名的ipv6解析结果将加入到该IPSet中
   ipset_ttl = 86400 # ipset记录超时时间，单位为秒，推荐设置以避免ipset记录过多
 
   # 可选自定义分组，用于其它情况

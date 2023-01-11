@@ -43,6 +43,7 @@ type Group struct {
 	TCPPingPort int  `toml:"tcp_ping_port"`
 
 	IPSet    string `toml:"ipset"`
+	IPSet6   string `toml:"ipset6"`
 	IPSetTTL int    `toml:"ipset_ttl"`
 
 	Redirector string `toml:"redirector"`

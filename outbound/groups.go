@@ -158,12 +158,19 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 		}
 		g.callers = callers
 		// ipset
-		if conf.IPSet != "" {
-			is, err := ipset.New(conf.IPSet, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL})
+		if name := conf.IPSet; name != "" {
+			is, err := ipset.New(name, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL})
 			if err != nil {
-				return nil, fmt.Errorf("build ipset %q failed: %w", conf.IPSet, err)
+				return nil, fmt.Errorf("build ipset %q failed: %w", name, err)
 			}
-			g.ipSet = is
+			g.ipSet = ipSetWrapper{is}
+		}
+		if name := conf.IPSet6; name != "" {
+			is, err := ipset.New(name, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL, HashFamily: "inet6"})
+			if err != nil {
+				return nil, fmt.Errorf("build ipset %q failed: %w", name, err)
+			}
+			g.ipSet6 = ipSetWrapper{is}
 		}
 		groups[name] = g
 	}
@@ -194,7 +201,8 @@ type groupImpl struct {
 	fastestIP   bool // 是否对响应中的IP地址进行测速，找出ping值最低的IP地址
 	tcpPingPort int  // 是否使用tcp ping
 
-	ipSet *ipset.IPSet // 将响应中的IPv4地址加入ipset
+	ipSet  iIPSet // 将响应中的IPv4地址加入ipset
+	ipSet6 iIPSet // 将响应中的IPv4地址加入ipset
 
 	stopCh  chan struct{}
 	stopped chan struct{}
@@ -362,14 +370,23 @@ doPing:
 }
 
 func (g *groupImpl) PostProcess(_ *dns.Msg, resp *dns.Msg) {
-	if resp == nil || g.ipSet == nil {
+	if resp == nil {
 		return
 	}
 	for _, answer := range resp.Answer {
-		if a, ok := answer.(*dns.A); ok {
-			if err := g.ipSet.Add(a.A.String(), g.ipSet.Timeout); err != nil {
-				logrus.Warnf("add %s to ipset<%s> failed: %+v", a.A, g.ipSet.Name, err)
-			}
+		var val string
+		var target iIPSet
+		switch tv := answer.(type) {
+		case *dns.A:
+			val, target = tv.A.String(), g.ipSet
+		case *dns.AAAA:
+			val, target = tv.AAAA.String(), g.ipSet6
+		}
+		if val == "" || target == nil {
+			continue
+		}
+		if err := target.Add(val, target.GetTimeout()); err != nil {
+			logrus.Warnf("add %s to ipset<%s> failed: %+v", val, target.GetName(), err)
 		}
 	}
 }

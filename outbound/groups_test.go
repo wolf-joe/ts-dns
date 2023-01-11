@@ -65,3 +65,28 @@ func TestDisableIPv6(t *testing.T) {
 	})
 	assert.Nil(t, resp)
 }
+
+func TestPostProcess(t *testing.T) {
+	var v4val, v6val string
+	group := &groupImpl{
+		ipSet: MockIPSet{
+			Name:    "",
+			Timeout: 0,
+			MockAdd: func(val string, _ int) error { v4val = val; return nil },
+		},
+		ipSet6: MockIPSet{
+			Name:    "",
+			Timeout: 0,
+			MockAdd: func(val string, _ int) error { v6val = val; return nil },
+		},
+	}
+	rr, err := dns.NewRR("z.cn 0 IN A 1.1.1.1")
+	assert.Nil(t, err)
+	group.PostProcess(nil, &dns.Msg{Answer: []dns.RR{rr}})
+	assert.Equal(t, "1.1.1.1", v4val)
+
+	rr, err = dns.NewRR("z.cn 0 IN AAAA ff80::1")
+	assert.Nil(t, err)
+	group.PostProcess(nil, &dns.Msg{Answer: []dns.RR{rr}})
+	assert.Equal(t, "ff80::1", v6val)
+}
