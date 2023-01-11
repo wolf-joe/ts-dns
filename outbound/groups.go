@@ -158,17 +158,17 @@ func BuildGroups(globalConf config.Conf) (map[string]IGroup, error) {
 		}
 		g.callers = callers
 		// ipset
-		if conf.IPSet != "" {
-			is, err := ipset.New(conf.IPSet, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL})
+		if name := conf.IPSet; name != "" {
+			is, err := ipset.New(name, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL})
 			if err != nil {
-				return nil, fmt.Errorf("build ipset %q failed: %w", conf.IPSet, err)
+				return nil, fmt.Errorf("build ipset %q failed: %w", name, err)
 			}
 			g.ipSet = ipSetWrapper{is}
 		}
-		if conf.IPSet6 != "" {
-			is, err := ipset.New(conf.IPSet, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL, HashFamily: "inet6"})
+		if name := conf.IPSet6; name != "" {
+			is, err := ipset.New(name, "hash:ip", &ipset.Params{Timeout: conf.IPSetTTL, HashFamily: "inet6"})
 			if err != nil {
-				return nil, fmt.Errorf("build ipset %q failed: %w", conf.IPSet, err)
+				return nil, fmt.Errorf("build ipset %q failed: %w", name, err)
 			}
 			g.ipSet6 = ipSetWrapper{is}
 		}
