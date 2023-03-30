@@ -3,14 +3,15 @@ package hosts
 import (
 	"bufio"
 	"fmt"
-	"github.com/miekg/dns"
-	"github.com/sirupsen/logrus"
-	"github.com/wolf-joe/ts-dns/config"
 	"net"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
+	"github.com/wolf-joe/ts-dns/config"
 )
 
 // region interface
@@ -71,6 +72,13 @@ func NewDNSHosts(conf config.Conf) (IDNSHosts, error) {
 			}
 			parts := strings.FieldsFunc(line, unicode.IsSpace)
 			if len(parts) < 2 {
+				continue
+			}
+			if ip := buildIPInfo(parts[0]); ip != zeroIP {
+				// linux style hosts file
+				for _, domain := range parts[1:] {
+					domainMap[domain] = ip
+				}
 				continue
 			}
 			if err = load(parts[0], parts[1]); err != nil {

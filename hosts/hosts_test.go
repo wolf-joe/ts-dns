@@ -1,11 +1,12 @@
 package hosts
 
 import (
+	"testing"
+
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/wolf-joe/ts-dns/config"
-	"testing"
 )
 
 func buildReq(host string, qType uint16) *dns.Msg {
@@ -16,6 +17,41 @@ func buildReq(host string, qType uint16) *dns.Msg {
 		Qclass: 0,
 	})
 	return msg
+}
+
+func TestLinuxHosts(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	cfg := config.Conf{HostsFiles: []string{
+		"testdata/linux_style.txt",
+	}}
+	r, err := NewDNSHosts(cfg)
+	assert.Nil(t, err)
+	assert.NotNil(t, r)
+
+	cases := []struct {
+		host  string
+		query uint16
+		isNil bool
+		resp  string
+	}{
+		{"x.cn", dns.TypeA, true, ""},
+		{"z.cn", dns.TypeA, false, "z.cn.	0	IN	A	1.1.2.2"},
+		{"b.cn", dns.TypeA, false, "b.cn.	0	IN	A	1.1.3.3"},
+		{"b", dns.TypeA, false, "b.	0	IN	A	1.1.3.3"},
+		{"a.b.cn", dns.TypeA, true, ""},
+	}
+	for _, c := range cases {
+		t.Log(c)
+		resp := r.Get(buildReq(c.host, c.query))
+		assert.Nil(t, err)
+		if c.isNil {
+			assert.Nil(t, resp)
+		} else {
+			assert.NotNil(t, resp)
+			assert.Equal(t, 1, len(resp.Answer))
+			assert.Equal(t, c.resp, resp.Answer[0].String())
+		}
+	}
 }
 
 func TestNewHostReader(t *testing.T) {
